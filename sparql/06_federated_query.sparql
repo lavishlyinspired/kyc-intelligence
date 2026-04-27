@@ -1,0 +1,17 @@
+# SPARQL federation example.
+#
+# To enable, expose Neo4j's RDF endpoint via n10s:
+#   GET http://localhost:7474/rdf/neo4j/sparql
+#
+# Then run something like:
+#
+# PREFIX neo4j: <http://localhost:7474/rdf/neo4j/sparql>
+# SELECT ?fiboEntity ?neoOwner WHERE {
+#   ?fiboEntity a <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/LegalPerson> .
+#   SERVICE <http://host.docker.internal:7474/rdf/neo4j/sparql> {
+#     ?fiboEntity <http://kyc-kg.example.org/ontology#directlyOwnedBy> ?neoOwner .
+#   }
+# }
+#
+# This is documented in the n10s-bridge skill.
+SELECT * WHERE { ?s ?p ?o } LIMIT 1

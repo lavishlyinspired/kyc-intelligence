@@ -1,0 +1,15 @@
+# UBO discovery using OWL TransitiveProperty inference.
+#
+# `kyc:directlyOwnedBy` is declared as owl:TransitiveProperty in the KYC
+# ontology, so the `owl-horst-optimized` ruleset materialises:
+#     A directlyOwnedBy B  ∧  B directlyOwnedBy C  ⇒  A directlyOwnedBy C
+#
+# Combined with `kyc:controlledBy`, we get the ultimate beneficial owner
+# WITHOUT writing a property-path query.
+PREFIX kyc: <http://kyc-kg.example.org/ontology#>
+
+SELECT ?entity ?ubo WHERE {
+    ?entity kyc:directlyOwnedBy ?intermediary .
+    ?intermediary kyc:controlledBy ?ubo .
+}
+LIMIT 50

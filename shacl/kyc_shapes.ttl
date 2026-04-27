@@ -1,0 +1,60 @@
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix kyc:  <http://kyc-kg.example.org/ontology#> .
+@prefix fibo-be: <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/> .
+
+# ─── LegalEntity shape ───────────────────────────────────────────────────────
+kyc:LegalEntityShape
+    a sh:NodeShape ;
+    sh:targetClass fibo-be:LegalPerson ;
+    rdfs:label "Legal Entity must have a valid LEI and a name" ;
+
+    sh:property [
+        sh:path kyc:leiCode ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:pattern "^[A-Z0-9]{20}$" ;
+        sh:message "LEI must be exactly 20 uppercase alphanumerics."
+    ] ;
+
+    sh:property [
+        sh:path kyc:legalName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "Every legal entity must have a legal name."
+    ] ;
+
+    sh:property [
+        sh:path kyc:hasJurisdiction ;
+        sh:nodeKind sh:IRI ;
+        sh:minCount 1 ;
+        sh:message "Every legal entity must declare its jurisdiction."
+    ] .
+
+# ─── NaturalPerson shape ─────────────────────────────────────────────────────
+kyc:NaturalPersonShape
+    a sh:NodeShape ;
+    sh:targetClass kyc:NaturalPerson ;
+
+    sh:property [
+        sh:path kyc:nationality ;
+        sh:datatype xsd:string ;
+        sh:pattern "^[A-Z]{2}$" ;
+        sh:message "Nationality must be ISO 3166-1 alpha-2 (e.g. 'US')."
+    ] .
+
+# ─── Ownership relationship shape ────────────────────────────────────────────
+kyc:OwnershipShape
+    a sh:NodeShape ;
+    sh:targetSubjectsOf kyc:directlyOwnedBy ;
+
+    sh:property [
+        sh:path kyc:ownershipPercentage ;
+        sh:datatype xsd:decimal ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 100 ;
+        sh:message "Ownership percentage must be between 0 and 100."
+    ] .

@@ -1,0 +1,13 @@
+# Cross-dataset join: pull GLEIF entities classified as FIBO LegalPerson
+# (works because the FIBO↔GLEIF mapping declares owl:equivalentClass).
+PREFIX fibo-be: <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/>
+PREFIX kyc:     <http://kyc-kg.example.org/ontology#>
+PREFIX rdfs:    <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?entity ?lei ?name ?jurisdiction WHERE {
+    ?entity a fibo-be:LegalPerson ;
+            kyc:leiCode ?lei ;
+            kyc:legalName ?name ;
+            kyc:hasJurisdiction ?jurisdiction .
+}
+LIMIT 25

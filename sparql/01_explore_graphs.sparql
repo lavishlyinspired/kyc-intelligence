@@ -1,0 +1,7 @@
+# What named graphs exist and how many triples does each hold?
+SELECT ?graph (COUNT(*) AS ?triples)
+WHERE {
+    GRAPH ?graph { ?s ?p ?o }
+}
+GROUP BY ?graph
+ORDER BY DESC(?triples)

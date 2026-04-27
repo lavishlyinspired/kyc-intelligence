@@ -1,0 +1,9 @@
+# FIBO LegalPerson subclass hierarchy (transitive via *)
+PREFIX rdfs:    <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX fibo-be: <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/>
+
+SELECT DISTINCT ?descendant ?label WHERE {
+    ?descendant rdfs:subClassOf* fibo-be:LegalPerson .
+    OPTIONAL { ?descendant rdfs:label ?label }
+}
+ORDER BY ?label

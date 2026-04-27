@@ -1,0 +1,71 @@
+version: "3.8"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# KYC Intelligence Stack
+#
+#   GraphDB  → ontology authority (FIBO/LCC), SPARQL, OWL reasoning
+#   Neo4j    → analytics, Cypher, GDS algorithms, GraphRAG
+#
+# Both share a network so n10s can reach GraphDB at http://graphdb:7200
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  graphdb:
+    image: ontotext/graphdb:10.7.0
+    container_name: kyc_graphdb
+    ports:
+      - "7200:7200"          # GraphDB Workbench: http://localhost:7200
+    volumes:
+      - graphdb_data:/opt/graphdb/home
+      - ./graphdb_config:/opt/graphdb/dist/configs
+    environment:
+      GDB_JAVA_OPTS: >-
+        -Xmx4g -Xms2g
+        -Dgraphdb.home=/opt/graphdb/home
+    networks: [kyc_net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7200/rest/repositories"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: kyc_neo4j
+    ports:
+      - "7474:7474"          # Neo4j Browser: http://localhost:7474
+      - "7687:7687"          # Bolt protocol
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+      - ./import:/var/lib/neo4j/import
+    environment:
+      NEO4J_AUTH: neo4j/kycpassword123
+      NEO4J_PLUGINS: '["apoc", "graph-data-science", "n10s"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,n10s.*,gds.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*,n10s.*,gds.*"
+      NEO4J_apoc_import_file_enabled: "true"
+      NEO4J_apoc_import_file_use__neo4j__config: "true"
+      NEO4J_server_memory_heap_initial__size: "2G"
+      NEO4J_server_memory_heap_max__size: "4G"
+      NEO4J_server_memory_pagecache_size: "1G"
+    networks: [kyc_net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+networks:
+  kyc_net:
+    driver: bridge
+
+volumes:
+  graphdb_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:
