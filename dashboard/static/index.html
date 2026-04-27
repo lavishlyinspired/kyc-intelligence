@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KYC Intelligence</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔎</text></svg>">
+<style>
+:root {
+  --bg: #f8f9fb;
+  --bg2: #ffffff;
+  --bg3: #f0f2f5;
+  --bg4: #e8ecf0;
+  --border: #d0d7de;
+  --border2: #e1e5ea;
+  --text: #1f2328;
+  --text2: #636c76;
+  --text3: #8b949e;
+  --accent: #0969da;
+  --accent-light: #ddf4ff;
+  --green: #1a7f37;
+  --green-bg: #dafbe1;
+  --red: #cf222e;
+  --red-bg: #ffebe9;
+  --orange: #bf8700;
+  --orange-bg: #fff8c5;
+  --purple: #8250df;
+  --purple-bg: #fbefff;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow: 0 1px 3px rgba(31,35,40,.12), 0 1px 2px rgba(31,35,40,.06);
+  --shadow-md: 0 4px 12px rgba(31,35,40,.12);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; font-size: 14px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Sidebar ─── */
+.sidebar { width: 250px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
+.sidebar-logo { padding: 20px; font-size: 17px; font-weight: 700; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; color: var(--accent); }
+.sidebar-nav { flex: 1; padding: 8px; overflow-y: auto; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 6px; color: var(--text2); cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+.nav-item .icon { font-size: 16px; width: 22px; text-align: center; }
+.nav-section { padding: 12px 14px 4px; font-size: 11px; text-transform: uppercase; color: var(--text3); letter-spacing: .8px; font-weight: 600; }
+
+/* ─── Main content ─── */
+.main { margin-left: 250px; flex: 1; min-width: 0; }
+.topbar { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg2); }
+.topbar h1 { font-size: 18px; font-weight: 600; color: var(--text); }
+.topbar-badges { display: flex; gap: 8px; }
+.badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.content { padding: 24px; max-width: 1600px; }
+
+/* ─── Cards ─── */
+.card { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card h3 { font-size: 15px; margin-bottom: 12px; color: var(--text); font-weight: 600; }
+.card-grid { display: grid; gap: 16px; }
+.card-grid-5 { grid-template-columns: repeat(5, 1fr); }
+.card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* ─── KPI ─── */
+.kpi { text-align: center; padding: 16px 12px; }
+.kpi-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.kpi-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; font-weight: 500; }
+
+/* ─── Tables ─── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; background: var(--bg3); color: var(--text2); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 2px solid var(--border); position: sticky; top: 0; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border2); }
+tr:hover td { background: var(--accent-light); }
+.risk-critical { color: var(--red); font-weight: 700; }
+.risk-high { color: #d1242f; font-weight: 600; }
+.risk-medium { color: var(--orange); font-weight: 500; }
+.risk-low { color: var(--green); }
+.risk-clean { color: var(--text3); }
+
+/* ─── Tags ─── */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.tag-sanctioned { background: var(--red-bg); color: var(--red); }
+.tag-pep { background: var(--purple-bg); color: var(--purple); }
+.tag-high { background: var(--red-bg); color: var(--red); }
+.tag-medium { background: var(--orange-bg); color: var(--orange); }
+.tag-low { background: var(--green-bg); color: var(--green); }
+
+/* ─── Form controls ─── */
+input, select, textarea { background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none; transition: border-color .15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(9,105,218,.15); }
+textarea { font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; font-size: 12px; resize: vertical; }
+button { background: var(--accent); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all .15s; }
+button:hover { background: #0860ca; }
+button.secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+button.secondary:hover { background: var(--bg4); }
+button.secondary.active-btn { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+
+/* ─── Chart bars ─── */
+.chart-bar { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 20px; }
+.chart-col { flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.chart-col-bar { width: 100%; min-width: 24px; max-width: 60px; border-radius: 4px 4px 0 0; transition: height .4s ease; position: relative; }
+.chart-col-bar:hover { filter: brightness(.9); }
+.chart-col-val { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.chart-col-label { font-size: 10px; color: var(--text2); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px; }
+
+/* ─── Graph canvas ─── */
+#graph-canvas { width: 100%; height: 500px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* ─── Query editor ─── */
+.query-editor { display: flex; flex-direction: column; gap: 12px; }
+.query-results { max-height: 450px; overflow: auto; font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 12px; background: var(--bg3); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border2); }
+.query-results pre { white-space: pre-wrap; word-break: break-all; }
+
+/* ─── Chat ─── */
+.chat-layout { display: grid; grid-template-columns: 260px 1fr; gap: 0; height: calc(100vh - 120px); min-height: 600px; }
+.chat-sidebar { background: var(--bg); border-right: 1px solid var(--border2); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--radius) 0 0 var(--radius); border: 1px solid var(--border2); }
+.chat-sidebar h4 { font-size: 11px; text-transform: uppercase; color: var(--text2); letter-spacing: .5px; margin: 10px 0 4px; padding: 0 4px; }
+.chat-sidebar h4:first-child { margin-top: 2px; }
+.chat-quick-btn { display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: var(--text); border-radius: 6px; line-height: 1.4; transition: background .15s; }
+.chat-quick-btn:hover { background: var(--bg2); }
+.chat-quick-btn .qb-icon { margin-right: 4px; }
+.chat-main { display: flex; flex-direction: column; border: 1px solid var(--border2); border-left: none; border-radius: 0 var(--radius) var(--radius) 0; overflow: hidden; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--bg); }
+.chat-msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; }
+.chat-msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.chat-msg.bot { align-self: flex-start; background: var(--bg2); border: 1px solid var(--border2); border-bottom-left-radius: 4px; }
+.chat-msg.bot strong { color: var(--accent); }
+.chat-msg table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+.chat-msg table th, .chat-msg table td { padding: 4px 8px; border: 1px solid var(--border2); text-align: left; }
+.chat-msg table th { background: var(--bg3); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+.chat-msg .query-block { margin-top: 10px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px; overflow: hidden; }
+.chat-msg .query-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg); border-bottom: 1px solid var(--border2); }
+.chat-msg .query-header .db-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: .5px; }
+.chat-msg .query-header .db-badge.neo4j { background: #0074d9; color: #fff; }
+.chat-msg .query-header .db-badge.sparql { background: #ff851b; color: #fff; }
+.chat-msg .query-header .toggle-btn { font-size: 11px; cursor: pointer; color: var(--accent); background: none; border: none; padding: 2px 6px; }
+.chat-msg .query-code { display: none; padding: 8px 10px; font-family: 'SFMono-Regular', monospace; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 300px; overflow-y: auto; }
+.chat-msg .query-code.open { display: block; }
+.chat-input-row { display: flex; gap: 8px; padding: 12px; background: var(--bg2); border-top: 1px solid var(--border2); }
+.chat-input-row input { flex: 1; }
+
+/* ─── Loading ─── */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-overlay { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text2); gap: 8px; }
+
+/* ─── Page visibility ─── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ─── Info box ─── */
+.info-box { background: var(--accent-light); border: 1px solid #b6d9fe; border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: #0550ae; margin-bottom: 16px; line-height: 1.6; }
+.warn-box { background: var(--orange-bg); border: 1px solid #d4a72c; border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: #6f5500; margin-bottom: 16px; }
+
+/* ─── Detail panel ─── */
+.detail-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detail-field { margin-bottom: 10px; }
+.detail-field label { font-size: 11px; color: var(--text2); text-transform: uppercase; display: block; margin-bottom: 2px; font-weight: 600; letter-spacing: .3px; }
+.detail-field .val { font-size: 14px; color: var(--text); }
+
+/* ─── Scrollable ─── */
+.scrollable-table { max-height: 500px; overflow-y: auto; }
+
+/* ─── Flex ─── */
+.flex { display: flex; } .flex-between { justify-content: space-between; } .flex-center { align-items: center; } .flex-wrap { flex-wrap: wrap; }
+.gap-4 { gap: 4px; } .gap-8 { gap: 8px; } .gap-16 { gap: 16px; }
+.mb-8 { margin-bottom: 8px; } .mb-16 { margin-bottom: 16px; } .mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; }
+
+/* ─── Responsive ─── */
+@media (max-width: 1200px) { .card-grid-5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) { .card-grid-5, .card-grid-4 { grid-template-columns: repeat(2, 1fr); } .sidebar { width: 60px; } .sidebar .nav-label, .sidebar .nav-section, .sidebar-logo span { display: none; } .main { margin-left: 60px; } }
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">🔎 <span>KYC Intelligence</span></div>
+  <div class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span><span class="nav-label">Dashboard</span></div>
+
+    <div class="nav-section">Investigation</div>
+    <div class="nav-item" data-page="entities"><span class="icon">🏢</span><span class="nav-label">Entity Explorer</span></div>
+    <div class="nav-item" data-page="persons"><span class="icon">👤</span><span class="nav-label">Persons</span></div>
+    <div class="nav-item" data-page="ubo"><span class="icon">🔗</span><span class="nav-label">UBO Chains</span></div>
+    <div class="nav-item" data-page="graph"><span class="icon">🕸️</span><span class="nav-label">Graph Explorer</span></div>
+    <div class="nav-item" data-page="chat"><span class="icon">💬</span><span class="nav-label">Chat Assistant</span></div>
+
+    <div class="nav-section">Analysis</div>
+    <div class="nav-item" data-page="risk"><span class="icon">⚠️</span><span class="nav-label">Risk Analysis</span></div>
+    <div class="nav-item" data-page="rings"><span class="icon">🔄</span><span class="nav-label">Circular Ownership</span></div>
+    <div class="nav-item" data-page="transactions"><span class="icon">💰</span><span class="nav-label">Transactions</span></div>
+    <div class="nav-item" data-page="shells"><span class="icon">🐚</span><span class="nav-label">Shell Companies</span></div>
+    <div class="nav-item" data-page="gds"><span class="icon">🧮</span><span class="nav-label">GDS Analytics</span></div>
+
+    <div class="nav-section">Tools</div>
+    <div class="nav-item" data-page="cypher"><span class="icon">⚡</span><span class="nav-label">Cypher Console</span></div>
+    <div class="nav-item" data-page="sparql"><span class="icon">🔍</span><span class="nav-label">SPARQL Console</span></div>
+    <div class="nav-item" data-page="ontology"><span class="icon">📚</span><span class="nav-label">Ontology Browser</span></div>
+  </div>
+</nav>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+<div class="topbar">
+  <h1 id="page-title">Dashboard</h1>
+  <div class="topbar-badges">
+    <span class="badge badge-green" id="neo4j-status">Neo4j ●</span>
+    <span class="badge badge-green" id="graphdb-status">GraphDB ●</span>
+  </div>
+</div>
+<div class="content">
+
+<!-- ═══ PAGE: Dashboard ═══ -->
+<div class="page active" id="page-dashboard">
+  <div class="card-grid card-grid-5 mb-16" id="kpi-row"></div>
+  <div class="card-grid card-grid-2 mb-16">
+    <div class="card"><h3>Risk Distribution</h3><div id="risk-chart" class="chart-bar"></div></div>
+    <div class="card"><h3>Avg Risk by Jurisdiction</h3><div id="jur-chart" class="chart-bar"></div></div>
+  </div>
+  <div class="card-grid card-grid-2 mb-16">
+    <div class="card"><h3>Entities by Category</h3><div id="cat-chart" class="chart-bar"></div></div>
+    <div class="card"><h3>Graph Statistics</h3><div id="dash-stats"></div></div>
+  </div>
+  <div class="card"><h3>Top Risk Entities</h3><div class="scrollable-table" id="dash-top-risk"></div></div>
+</div>
+
+<!-- ═══ PAGE: Entities ═══ -->
+<div class="page" id="page-entities">
+  <div class="card">
+    <div class="flex flex-between flex-center mb-16 flex-wrap gap-8">
+      <div class="flex gap-8 flex-wrap">
+        <input type="text" id="entity-search" placeholder="Search by name..." style="width:200px">
+        <select id="entity-jur-filter"><option value="">All Jurisdictions</option></select>
+        <select id="entity-tier-filter"><option value="">All Risk Tiers</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        <select id="entity-cat-filter"><option value="">All Categories</option><option value="CORPORATION">Corporation</option><option value="TRUST">Trust</option><option value="FUND">Fund</option><option value="PARTNERSHIP">Partnership</option><option value="BRANCH">Branch</option><option value="LIMITED_PARTNERSHIP">Limited Partnership</option></select>
+      </div>
+      <div class="flex gap-8 flex-center">
+        <button class="secondary" id="entity-prev">← Prev</button>
+        <span id="entity-page-info" style="font-size:12px;color:var(--text2)"></span>
+        <button class="secondary" id="entity-next">Next →</button>
+      </div>
+    </div>
+    <div class="scrollable-table" id="entity-table"></div>
+  </div>
+  <div class="card" id="entity-detail-card" style="display:none">
+    <h3 id="entity-detail-title">Entity Details</h3>
+    <div id="entity-detail-body"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Persons ═══ -->
+<div class="page" id="page-persons">
+  <div class="card">
+    <div class="flex gap-8 mb-16 flex-wrap flex-center">
+      <button class="secondary active-btn" id="persons-all" onclick="loadPersons()">All Persons</button>
+      <button class="secondary" id="persons-sanc" onclick="loadPersons('sanctioned')">Sanctioned</button>
+      <button class="secondary" id="persons-pep" onclick="loadPersons('pep')">PEPs</button>
+      <input type="text" id="persons-search" placeholder="Search persons..." style="width:200px;margin-left:auto" onkeyup="if(event.key==='Enter')loadPersons(null,this.value)">
+    </div>
+    <div class="scrollable-table" id="persons-table"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: UBO Chains ═══ -->
+<div class="page" id="page-ubo">
+  <div class="card">
+    <div class="info-box mb-16">Trace the <strong>Ultimate Beneficial Ownership</strong> chain for any entity. Enter an entity ID and select the maximum traversal depth.</div>
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <input type="text" id="ubo-entity-id" placeholder="Entity ID (e.g. ENTITY_0042)" style="width:280px">
+      <select id="ubo-depth"><option value="3">Max 3 hops</option><option value="6" selected>Max 6 hops</option><option value="10">Max 10 hops</option></select>
+      <button onclick="findUBO()">Find UBO Chain</button>
+    </div>
+    <div id="ubo-results"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Graph Explorer ═══ -->
+<div class="page" id="page-graph">
+  <div class="card">
+    <div class="info-box mb-16">Interactive <strong>force-directed graph</strong> visualization. Enter an entity ID to explore its ownership and control network.</div>
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <input type="text" id="graph-entity-id" placeholder="Entity ID (e.g. ENTITY_0042)" style="width:280px">
+      <select id="graph-depth"><option value="1">Depth 1</option><option value="2" selected>Depth 2</option><option value="3">Depth 3</option></select>
+      <button onclick="loadGraph()">Visualize</button>
+    </div>
+    <canvas id="graph-canvas"></canvas>
+    <div id="graph-legend" class="mt-8" style="font-size:12px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
+      <span><span style="color:#cf222e;font-size:16px">●</span> Sanctioned</span>
+      <span><span style="color:#8250df;font-size:16px">●</span> PEP</span>
+      <span><span style="color:#bf8700;font-size:16px">●</span> High-Risk</span>
+      <span><span style="color:#0969da;font-size:16px">●</span> Entity</span>
+      <span><span style="color:#636c76;font-size:16px">●</span> Person</span>
+      <span>━ <span style="color:#0969da">Ownership</span></span>
+      <span>━ <span style="color:#8250df">Control</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Chat Assistant ═══ -->
+<div class="page" id="page-chat">
+  <div class="chat-layout">
+    <!-- Sidebar with suggested questions -->
+    <div class="chat-sidebar">
+      <h4>Entity Investigation</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Who owns ENTITY_0042?')"><span class="qb-icon">🔍</span> Who owns ENTITY_0042?</button>
+      <button class="chat-quick-btn" onclick="chatQ('Risk of ENTITY_0303')"><span class="qb-icon">⚠️</span> Risk profile ENTITY_0303</button>
+      <button class="chat-quick-btn" onclick="chatQ('Sanctions check ENTITY_0042')"><span class="qb-icon">🔴</span> Sanctions check</button>
+      <button class="chat-quick-btn" onclick="chatQ('Detail ENTITY_0042')"><span class="qb-icon">📋</span> Full entity detail</button>
+      <button class="chat-quick-btn" onclick="chatQ('Transactions of ENTITY_0000')"><span class="qb-icon">💰</span> Entity transactions</button>
+      <button class="chat-quick-btn" onclick="chatQ('Subsidiaries of ENTITY_0009')"><span class="qb-icon">🏢</span> Subsidiaries</button>
+      <button class="chat-quick-btn" onclick="chatQ('Compare ENTITY_0001 and ENTITY_0050')"><span class="qb-icon">⚖️</span> Compare entities</button>
+      <button class="chat-quick-btn" onclick="chatQ('Path between ENTITY_0001 and ENTITY_0050')"><span class="qb-icon">🔗</span> Path between</button>
+      <h4>Risk & Analytics</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Top 10 risk entities')"><span class="qb-icon">📊</span> Top risk entities</button>
+      <button class="chat-quick-btn" onclick="chatQ('Circular ownership')"><span class="qb-icon">🔄</span> Circular ownership</button>
+      <button class="chat-quick-btn" onclick="chatQ('Shell companies')"><span class="qb-icon">🏚️</span> Shell companies</button>
+      <button class="chat-quick-btn" onclick="chatQ('Show PEPs')"><span class="qb-icon">🟣</span> PEP list</button>
+      <button class="chat-quick-btn" onclick="chatQ('Sanctioned list')"><span class="qb-icon">🔴</span> Sanctioned list</button>
+      <button class="chat-quick-btn" onclick="chatQ('Suspicious transactions')"><span class="qb-icon">🚨</span> Suspicious txns</button>
+      <button class="chat-quick-btn" onclick="chatQ('Structuring detection')"><span class="qb-icon">💵</span> Structuring</button>
+      <h4>GDS Analytics</h4>
+      <button class="chat-quick-btn" onclick="chatQ('PageRank leaders')"><span class="qb-icon">📈</span> PageRank leaders</button>
+      <button class="chat-quick-btn" onclick="chatQ('Betweenness leaders')"><span class="qb-icon">🌉</span> Key intermediaries</button>
+      <button class="chat-quick-btn" onclick="chatQ('Communities')"><span class="qb-icon">👥</span> Community clusters</button>
+      <button class="chat-quick-btn" onclick="chatQ('GDS summary')"><span class="qb-icon">📊</span> GDS summary</button>
+      <button class="chat-quick-btn" onclick="chatQ('Cross-jurisdiction chains')"><span class="qb-icon">🌍</span> Cross-jurisdiction</button>
+      <h4>Knowledge Graph (SPARQL)</h4>
+      <button class="chat-quick-btn" onclick="chatQ('FIBO classes')"><span class="qb-icon">🧬</span> FIBO classes</button>
+      <button class="chat-quick-btn" onclick="chatQ('Ownership classes')"><span class="qb-icon">📑</span> Ownership classes</button>
+      <button class="chat-quick-btn" onclick="chatQ('Ontology properties')"><span class="qb-icon">🔧</span> Object properties</button>
+      <button class="chat-quick-btn" onclick="chatQ('Named graphs')"><span class="qb-icon">📂</span> Named graphs</button>
+      <button class="chat-quick-btn" onclick="chatQ('GLEIF entities')"><span class="qb-icon">🏦</span> GLEIF entities</button>
+      <button class="chat-quick-btn" onclick="chatQ('Subclass hierarchy')"><span class="qb-icon">🌳</span> Class hierarchy</button>
+      <button class="chat-quick-btn" onclick="chatQ('FIBO GLEIF mapping')"><span class="qb-icon">🗺️</span> FIBO↔GLEIF map</button>
+      <button class="chat-quick-btn" onclick="chatQ('ISO countries')"><span class="qb-icon">🌐</span> ISO countries</button>
+      <h4>Other</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Jurisdiction analysis')"><span class="qb-icon">🗂️</span> Jurisdiction risk</button>
+      <button class="chat-quick-btn" onclick="chatQ('Graph statistics')"><span class="qb-icon">📊</span> Graph statistics</button>
+      <button class="chat-quick-btn" onclick="chatQ('Orphan nodes')"><span class="qb-icon">🏝️</span> Orphan nodes</button>
+      <h4>🔴 Advanced Investigations</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Which entities are ultimately controlled by sanctioned individuals?')"><span class="qb-icon">🔴</span> Sanctions exposure</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which high-risk entities are controlled by politically exposed persons?')"><span class="qb-icon">🟣</span> PEP high-risk</button>
+      <button class="chat-quick-btn" onclick="chatQ('Find shell companies in offshore jurisdictions linked to sanctioned or PEP persons')"><span class="qb-icon">🏚️</span> Offshore shells + sanctions</button>
+      <button class="chat-quick-btn" onclick="chatQ('Assess the total risk exposure of all circular ownership rings')"><span class="qb-icon">🔄</span> Ring risk assessment</button>
+      <button class="chat-quick-btn" onclick="chatQ('Who controls the most entities behind the scenes through multiple layers?')"><span class="qb-icon">🕵️</span> Hidden controllers</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which entities combine multiple money laundering red flags?')"><span class="qb-icon">🚩</span> Multi-red-flag AML</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which entities are at risk because they are close to sanctioned entities?')"><span class="qb-icon">☢️</span> Contagion risk</button>
+      <button class="chat-quick-btn" onclick="chatQ('What are the deepest corporate ownership hierarchies?')"><span class="qb-icon">🌲</span> Largest ownership trees</button>
+      <button class="chat-quick-btn" onclick="chatQ('Where is risk concentrated across jurisdictions and categories?')"><span class="qb-icon">🗺️</span> Risk heatmap</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which communities have dangerously high risk scores?')"><span class="qb-icon">👥</span> High-risk communities</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which entity pairs form the most active transaction networks?')"><span class="qb-icon">💸</span> Transaction networks</button>
+      <button class="chat-quick-btn" onclick="chatQ('What is the blast radius if ENTITY_0385 is sanctioned?')"><span class="qb-icon">💥</span> Sanctions blast radius</button>
+      <button class="chat-quick-btn" onclick="chatQ('Find individuals who control entities across 3 or more countries')"><span class="qb-icon">🌍</span> Cross-border controllers</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which entities are the weakest links in the network?')"><span class="qb-icon">⛓️</span> Network chokepoints</button>
+      <button class="chat-quick-btn" onclick="chatQ('Find controllers whose entities span wide risk ranges')"><span class="qb-icon">📉</span> Risk arbitrage</button>
+      <button class="chat-quick-btn" onclick="chatQ('Investigate ENTITY_0303')"><span class="qb-icon">🔎</span> Due diligence report</button>
+      <h4>🔴 Advanced SPARQL</h4>
+      <button class="chat-quick-btn" onclick="chatQ('How does FIBO model ownership and control?')"><span class="qb-icon">🧬</span> FIBO ownership model</button>
+      <button class="chat-quick-btn" onclick="chatQ('How are GLEIF entities typed across ontologies?')"><span class="qb-icon">🏷️</span> GLEIF type analysis</button>
+      <button class="chat-quick-btn" onclick="chatQ('How complete is our knowledge graph?')"><span class="qb-icon">📊</span> Ontology coverage</button>
+      <button class="chat-quick-btn" onclick="chatQ('How do FIBO, GLEIF, and KYC ontologies relate?')"><span class="qb-icon">🔗</span> Cross-ontology links</button>
+    </div>
+    <!-- Main chat area -->
+    <div class="chat-main">
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-msg bot">
+          <strong>KYC Investigation Assistant</strong><br><br>
+          I can query both <strong>Neo4j</strong> (Cypher) and <strong>GraphDB</strong> (SPARQL). I'll show you the exact query I execute.<br><br>
+          Use the sidebar buttons or type your own question. Examples:<br>
+          • "Who owns ENTITY_0042?"<br>
+          • "FIBO ownership classes"<br>
+          • "Top 10 risk entities"<br><br>
+          Type <strong>help</strong> for all available commands.
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Ask about entities, ownership, risk, ontology..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Risk Analysis ═══ -->
+<div class="page" id="page-risk">
+  <div class="card-grid card-grid-2 mb-16">
+    <div class="card"><h3>Risk Score Distribution</h3><div id="risk-dist-chart" class="chart-bar"></div></div>
+    <div class="card"><h3>Jurisdiction Risk Analysis</h3><div class="scrollable-table" id="jur-heatmap"></div></div>
+  </div>
+  <div class="card">
+    <h3>Risk Score Formula</h3>
+    <div style="font-size:13px;color:var(--text2);line-height:1.8">
+      <code style="background:var(--bg3);padding:4px 8px;border-radius:4px;font-size:12px">kycRiskScore = jurisdictionRisk + sanctionedUBO + pepControl + circularOwnership</code><br><br>
+      <strong style="color:var(--text)">jurisdictionRisk:</strong> high=35, medium=15, low=0<br>
+      <strong style="color:var(--text)">sanctionedUBO:</strong> +40 if any sanctioned person in ownership chain (up to 6 hops)<br>
+      <strong style="color:var(--text)">pepControl:</strong> +15 if directly controlled by a PEP<br>
+      <strong style="color:var(--text)">circularOwnership:</strong> +20 if entity is in an SCC ring
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Circular Ownership ═══ -->
+<div class="page" id="page-rings">
+  <div class="card">
+    <h3>Detected Circular Ownership Rings (SCC)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Entities that own each other in a cycle — strong indicator of layered shell company structures.</p>
+    <div id="rings-list"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Transactions ═══ -->
+<div class="page" id="page-transactions">
+  <div class="card mb-16">
+    <h3>Suspicious Transactions</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">All transactions flagged as suspicious by the detection engine.</p>
+    <div class="scrollable-table" id="suspicious-txns"></div>
+  </div>
+  <div class="card mb-16">
+    <h3>Structuring Detection ($9,000–$10,000)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Entity pairs with 2+ transactions just below the $10k reporting threshold.</p>
+    <div class="scrollable-table" id="structuring-txns"></div>
+  </div>
+  <div class="card">
+    <h3>Entity Transaction Lookup</h3>
+    <div class="flex gap-8 mb-16">
+      <input type="text" id="txn-entity-id" placeholder="Entity ID" style="width:220px">
+      <button onclick="loadEntityTxns()">Load Transactions</button>
+    </div>
+    <div class="scrollable-table" id="entity-txns"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Shell Companies ═══ -->
+<div class="page" id="page-shells">
+  <div class="card">
+    <h3>Shell Company Indicators</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Entities with no operational address — common indicator of shell company structures.</p>
+    <div class="scrollable-table" id="shells-table"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: GDS Analytics ═══ -->
+<div class="page" id="page-gds">
+  <div class="card-grid card-grid-3 mb-16" id="gds-summary-cards"></div>
+  <div class="card mb-16">
+    <h3>GDS Algorithm Scores</h3>
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <button class="secondary active-btn" id="gds-sort-pr" onclick="loadGDSScores('pageRank')">Sort: PageRank</button>
+      <button class="secondary" id="gds-sort-bt" onclick="loadGDSScores('betweenness')">Sort: Betweenness</button>
+      <button class="secondary" id="gds-sort-cm" onclick="loadGDSScores('community')">Sort: Community</button>
+    </div>
+    <div class="scrollable-table" id="gds-scores-table"></div>
+  </div>
+  <div class="card">
+    <h3>Community Clusters (Louvain)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Groups of entities that are densely connected — potential corporate group structures.</p>
+    <div id="communities-list"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Cypher Console ═══ -->
+<div class="page" id="page-cypher">
+  <div class="card query-editor">
+    <h3>Neo4j Cypher Console (Read-Only)</h3>
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <button class="secondary" onclick="setCypher('top-risk')">Top Risk</button>
+      <button class="secondary" onclick="setCypher('ubo')">UBO Query</button>
+      <button class="secondary" onclick="setCypher('rings')">Circular Ownership</button>
+      <button class="secondary" onclick="setCypher('shells')">Shell Companies</button>
+      <button class="secondary" onclick="setCypher('structuring')">Structuring</button>
+      <button class="secondary" onclick="setCypher('pep')">PEP Exposure</button>
+      <button class="secondary" onclick="setCypher('schema')">Schema</button>
+      <button class="secondary" onclick="setCypher('gds')">GDS Scores</button>
+    </div>
+    <textarea id="cypher-input" rows="8" placeholder="Enter Cypher query..."></textarea>
+    <div class="flex gap-8"><button onclick="runCypher()">▶ Execute</button><button class="secondary" onclick="document.getElementById('cypher-results').style.display='none'">Clear</button></div>
+    <div class="query-results" id="cypher-results" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: SPARQL Console ═══ -->
+<div class="page" id="page-sparql">
+  <div class="card query-editor">
+    <h3>GraphDB SPARQL Console (Read-Only)</h3>
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <button class="secondary" onclick="setSparql('graphs')">Named Graphs</button>
+      <button class="secondary" onclick="setSparql('classes')">FIBO Classes</button>
+      <button class="secondary" onclick="setSparql('properties')">KYC Properties</button>
+      <button class="secondary" onclick="setSparql('mapping')">FIBO↔GLEIF</button>
+      <button class="secondary" onclick="setSparql('subclasses')">Subclass Hierarchy</button>
+    </div>
+    <textarea id="sparql-input" rows="8" placeholder="Enter SPARQL query..."></textarea>
+    <div class="flex gap-8"><button onclick="runSparql()">▶ Execute</button><button class="secondary" onclick="document.getElementById('sparql-results').style.display='none'">Clear</button></div>
+    <div class="query-results" id="sparql-results" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: Ontology Browser ═══ -->
+<div class="page" id="page-ontology">
+  <div class="info-box mb-16">
+    <strong>Neo4j Browser Display Names:</strong> The <code>n4sch__</code> prefix on labels (visible in the attached screenshot) comes from n10s (neosemantics).
+    In Neo4j Browser: click a node label → change <em>Caption</em> to <code>name</code> (for data nodes) or <code>uri</code> (for ontology nodes).
+    Your actual data nodes (LegalEntity, NaturalPerson) already have clean labels.
+  </div>
+  <div class="card-grid card-grid-2 mb-16">
+    <div class="card"><h3>Named Graphs (GraphDB)</h3><div id="ontology-graphs"></div></div>
+    <div class="card"><h3>Neo4j Schema</h3><div id="ontology-schema"></div></div>
+  </div>
+  <div class="card-grid card-grid-2">
+    <div class="card"><h3>FIBO Ontology Classes (n10s)</h3><div class="scrollable-table" id="ontology-classes"></div></div>
+    <div class="card"><h3>Ontology Relationships</h3><div class="scrollable-table" id="ontology-rels"></div></div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  API helper
+// ═══════════════════════════════════════════════════════════════════════════════
+async function api(path, opts) {
+  try {
+    const r = await fetch(path, opts);
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    return r.json();
+  } catch(e) {
+    console.error('API error:', path, e);
+    throw e;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Navigation
+// ═══════════════════════════════════════════════════════════════════════════════
+const navItems = document.querySelectorAll('.nav-item');
+const pages = document.querySelectorAll('.page');
+const pageTitle = document.getElementById('page-title');
+const pageTitles = {
+  dashboard:'Dashboard', entities:'Entity Explorer', persons:'Persons & Watchlists',
+  ubo:'UBO Chain Traversal', graph:'Graph Explorer', chat:'Chat Assistant',
+  risk:'Risk Analysis', rings:'Circular Ownership', transactions:'Transaction Analysis',
+  shells:'Shell Companies', gds:'GDS Analytics',
+  cypher:'Cypher Console', sparql:'SPARQL Console', ontology:'Ontology Browser'
+};
+
+navItems.forEach(item => item.addEventListener('click', () => {
+  const pg = item.dataset.page;
+  navItems.forEach(n => n.classList.remove('active'));
+  item.classList.add('active');
+  pages.forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + pg).classList.add('active');
+  pageTitle.textContent = pageTitles[pg] || pg;
+  if (pageLoaders[pg]) pageLoaders[pg]();
+}));
+
+const pageLoaders = {
+  dashboard: loadDashboard,
+  entities: loadEntities,
+  persons: () => loadPersons(),
+  risk: loadRisk,
+  rings: loadRings,
+  transactions: loadTransactions,
+  shells: loadShells,
+  ontology: loadOntology,
+  gds: loadGDS,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Utilities
+// ═══════════════════════════════════════════════════════════════════════════════
+function riskClass(score) {
+  if (score >= 70) return 'risk-critical';
+  if (score >= 50) return 'risk-high';
+  if (score >= 30) return 'risk-medium';
+  if (score >= 10) return 'risk-low';
+  return 'risk-clean';
+}
+function tierTag(tier) {
+  return `<span class="tag tag-${tier || 'low'}">${(tier || '?').toUpperCase()}</span>`;
+}
+function personTags(row) {
+  let t = '';
+  if (row.isSanctioned) t += '<span class="tag tag-sanctioned">SANCTIONED</span> ';
+  if (row.isPEP) t += '<span class="tag tag-pep">PEP</span> ';
+  return t || '<span style="color:var(--text3)">—</span>';
+}
+function makeTable(headers, rows, cellFn) {
+  if (!rows || !rows.length) return '<div style="color:var(--text3);padding:20px;text-align:center">No data available</div>';
+  let h = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  rows.forEach(r => { h += '<tr>' + cellFn(r) + '</tr>'; });
+  return h + '</tbody></table>';
+}
+function loading(el) { el.innerHTML = '<div class="loading-overlay"><div class="spinner"></div> Loading...</div>'; }
+function num(n, d = 0) { return typeof n === 'number' ? n.toFixed(d) : '–'; }
+function esc(s) { return String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function shortUri(uri) {
+  if (!uri) return '–';
+  if (uri.includes('#')) return uri.split('#').pop();
+  return uri.split('/').pop();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Bar chart helper
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderBarChart(el, items, {labelKey='label', valueKey='value', colorFn=null, maxH=120}={}) {
+  const maxVal = Math.max(...items.map(i => i[valueKey]), 1);
+  el.innerHTML = items.map(i => {
+    const pct = (i[valueKey] / maxVal) * maxH;
+    const color = colorFn ? colorFn(i) : 'var(--accent)';
+    return `<div class="chart-col">
+      <div class="chart-col-val">${i[valueKey]}</div>
+      <div class="chart-col-bar" style="height:${pct}px;background:${color}"></div>
+      <div class="chart-col-label" title="${i[labelKey]}">${i[labelKey]}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Dashboard
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  const kpi = document.getElementById('kpi-row');
+  loading(kpi);
+  try {
+    const d = await api('/api/kpis');
+    kpi.innerHTML = [
+      {v: d.entities, l: 'Entities', c: 'var(--accent)'},
+      {v: d.persons, l: 'Persons', c: 'var(--text)'},
+      {v: d.highRisk, l: 'High Risk', c: 'var(--red)'},
+      {v: d.suspiciousTxns, l: 'Suspicious Txns', c: 'var(--orange)'},
+      {v: d.rings, l: 'Ownership Rings', c: 'var(--purple)'},
+    ].map(k => `<div class="card kpi"><div class="kpi-value" style="color:${k.c}">${k.v}</div><div class="kpi-label">${k.l}</div></div>`).join('');
+
+    // Risk chart
+    const dist = await api('/api/risk/distribution');
+    const riskColors = {Critical:'#cf222e', High:'#d1242f', Medium:'#bf8700', Low:'#1a7f37', Clean:'#d0d7de'};
+    renderBarChart(document.getElementById('risk-chart'),
+      dist.map(d => ({label: d.bucket, value: d.count, _c: d.bucket})),
+      {colorFn: i => riskColors[i._c] || 'var(--accent)'});
+
+    // Jurisdiction chart
+    const jurs = await api('/api/risk/jurisdictions');
+    renderBarChart(document.getElementById('jur-chart'),
+      jurs.map(j => ({label: j.jurisdiction, value: j.avgScore, _hr: j.highRiskCount})),
+      {colorFn: i => i._hr > 0 ? '#cf222e' : '#0969da'});
+
+    // Category chart
+    const entities = await api('/api/entities?limit=500');
+    const catCounts = {};
+    entities.items.forEach(e => { catCounts[e.category] = (catCounts[e.category]||0) + 1; });
+    const catData = Object.entries(catCounts).map(([k,v]) => ({label:k,value:v})).sort((a,b)=>b.value-a.value);
+    renderBarChart(document.getElementById('cat-chart'), catData, {colorFn: () => '#0969da'});
+
+    // Stats
+    const stats = await api('/api/stats');
+    document.getElementById('dash-stats').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+        ${stats.labels.map(l => `<div class="flex flex-between" style="padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">${l.label}</span><strong>${l.count.toLocaleString()}</strong></div>`).join('')}
+        <div style="grid-column:span 2;margin-top:8px;font-weight:600;color:var(--text2)">Relationships</div>
+        ${stats.relationships.map(r => `<div class="flex flex-between" style="padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">${r.type}</span><strong>${r.count.toLocaleString()}</strong></div>`).join('')}
+      </div>`;
+
+    // Top risk table
+    const top = await api('/api/entities?limit=15&sort=score');
+    document.getElementById('dash-top-risk').innerHTML = makeTable(
+      ['ID', 'Name', 'Jurisdiction', 'Category', 'Tier', 'Score'],
+      top.items,
+      r => `<td><a href="#" onclick="showEntity('${r.id}');return false">${r.id}</a></td>
+            <td>${esc(r.name)}</td><td>${r.jurisdiction}</td><td style="font-size:11px">${r.category}</td>
+            <td>${tierTag(r.riskTier)}</td><td class="${riskClass(r.score)}">${r.score}</td>`
+    );
+  } catch(e) { kpi.innerHTML = `<div class="card" style="color:var(--red)">Error: ${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Entity Explorer
+// ═══════════════════════════════════════════════════════════════════════════════
+let entityOffset = 0;
+const entityLimit = 30;
+
+async function loadEntities() {
+  const tbl = document.getElementById('entity-table');
+  loading(tbl);
+  const search = document.getElementById('entity-search').value;
+  const jur = document.getElementById('entity-jur-filter').value;
+  const tier = document.getElementById('entity-tier-filter').value;
+  const cat = document.getElementById('entity-cat-filter').value;
+  let url = `/api/entities?limit=${entityLimit}&offset=${entityOffset}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (jur) url += `&jurisdiction=${jur}`;
+  if (tier) url += `&risk_tier=${tier}`;
+  if (cat) url += `&category=${cat}`;
+  try {
+    const d = await api(url);
+    document.getElementById('entity-page-info').textContent =
+      `${entityOffset + 1}–${Math.min(entityOffset + entityLimit, d.total)} of ${d.total}`;
+    tbl.innerHTML = makeTable(
+      ['ID', 'Name', 'LEI', 'Jurisdiction', 'Category', 'Tier', 'Score', 'Active'],
+      d.items,
+      r => `<td><a href="#" onclick="showEntity('${r.id}');return false">${r.id}</a></td>
+            <td>${esc(r.name)}</td><td style="font-size:11px;font-family:monospace">${r.lei || ''}</td>
+            <td>${r.jurisdiction} <span style="color:var(--text3);font-size:11px">${r.jurisdictionName||''}</span></td>
+            <td style="font-size:11px">${r.category || ''}</td>
+            <td>${tierTag(r.riskTier)}</td>
+            <td class="${riskClass(r.score)}">${num(r.score, 0)}</td>
+            <td>${r.isActive ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>'}</td>`
+    );
+  } catch(e) { tbl.innerHTML = `<div style="color:var(--red);padding:16px">${e.message}</div>`; }
+}
+document.getElementById('entity-search').addEventListener('input', () => { entityOffset = 0; loadEntities(); });
+document.getElementById('entity-jur-filter').addEventListener('change', () => { entityOffset = 0; loadEntities(); });
+document.getElementById('entity-tier-filter').addEventListener('change', () => { entityOffset = 0; loadEntities(); });
+document.getElementById('entity-cat-filter').addEventListener('change', () => { entityOffset = 0; loadEntities(); });
+document.getElementById('entity-prev').addEventListener('click', () => { entityOffset = Math.max(0, entityOffset - entityLimit); loadEntities(); });
+document.getElementById('entity-next').addEventListener('click', () => { entityOffset += entityLimit; loadEntities(); });
+
+async function showEntity(id) {
+  document.querySelector('[data-page="entities"]').click();
+  const card = document.getElementById('entity-detail-card');
+  const body = document.getElementById('entity-detail-body');
+  card.style.display = 'block';
+  loading(body);
+  document.getElementById('entity-detail-title').textContent = id;
+  try {
+    const d = await api(`/api/entities/${id}`);
+    const e = d.entity;
+    body.innerHTML = `
+      <div class="detail-panel">
+        <div>
+          <div class="detail-field"><label>Name</label><div class="val">${esc(e.name)}</div></div>
+          <div class="detail-field"><label>LEI</label><div class="val" style="font-family:monospace">${e.lei}</div></div>
+          <div class="detail-field"><label>Jurisdiction</label><div class="val">${e.jurisdiction} (${esc(e.jurisdictionName || '')}) ${tierTag(e.riskTier)}</div></div>
+          <div class="detail-field"><label>Category</label><div class="val">${e.category}</div></div>
+          <div class="detail-field"><label>Active</label><div class="val">${e.isActive ? 'Yes' : 'No'}</div></div>
+          <div class="detail-field"><label>Operational Address</label><div class="val">${e.hasOperationalAddress ? 'Yes' : '<span style="color:var(--red)">No</span>'}</div></div>
+        </div>
+        <div>
+          <div class="detail-field"><label>KYC Risk Score</label><div class="val ${riskClass(e.kycRiskScore)}" style="font-size:28px;font-weight:700">${e.kycRiskScore || 0}<span style="font-size:14px;color:var(--text3)">/100</span></div></div>
+          <div class="detail-field"><label>PageRank</label><div class="val">${num(e.pageRankScore, 4)}</div></div>
+          <div class="detail-field"><label>Betweenness</label><div class="val">${num(e.betweennessScore, 2)}</div></div>
+          <div class="detail-field"><label>Community (Louvain)</label><div class="val">${e.louvainCommunityId != null ? '#' + e.louvainCommunityId : '–'}</div></div>
+          <div class="detail-field"><label>SCC Component</label><div class="val">${e.sccComponentId != null && e.sccComponentId !== e.id ? '<span style="color:var(--red)">⚠ Ring #' + e.sccComponentId + '</span>' : '<span style="color:var(--green)">None</span>'}</div></div>
+        </div>
+      </div>
+      <div class="card-grid card-grid-3 mt-16">
+        <div><h3 style="font-size:14px;margin-bottom:8px">Parents (owned by)</h3>
+          ${d.parents.length ? d.parents.map(p => `<div style="padding:4px 0;border-bottom:1px solid var(--border2)">↑ <a href="#" onclick="showEntity('${p.id}');return false">${esc(p.name)}</a> <span style="color:var(--text2);font-size:12px">${p.pct != null ? num(p.pct, 1) + '%' : ''} ${p.since ? 'since ' + p.since : ''}</span></div>`).join('') : '<span style="color:var(--text3)">None</span>'}
+        </div>
+        <div><h3 style="font-size:14px;margin-bottom:8px">Children (subsidiaries)</h3>
+          ${d.children.length ? d.children.map(c => `<div style="padding:4px 0;border-bottom:1px solid var(--border2)">↓ <a href="#" onclick="showEntity('${c.id}');return false">${esc(c.name)}</a> <span style="color:var(--text2);font-size:12px">${c.pct != null ? num(c.pct, 1) + '%' : ''}</span></div>`).join('') : '<span style="color:var(--text3)">None</span>'}
+        </div>
+        <div><h3 style="font-size:14px;margin-bottom:8px">Controllers</h3>
+          ${d.controllers.length ? d.controllers.map(c => `<div style="padding:4px 0;border-bottom:1px solid var(--border2)">👤 ${esc(c.name)} ${personTags(c)} <span style="color:var(--text2);font-size:11px">${c.role || ''}</span></div>`).join('') : '<span style="color:var(--text3)">None</span>'}
+        </div>
+      </div>
+      <div class="mt-16 flex gap-8 flex-wrap">
+        <button class="secondary" onclick="document.getElementById('ubo-entity-id').value='${id}';document.querySelector('[data-page=ubo]').click();findUBO()">🔗 Find UBO</button>
+        <button class="secondary" onclick="document.getElementById('graph-entity-id').value='${id}';document.querySelector('[data-page=graph]').click();loadGraph()">🕸️ Visualize</button>
+        <button class="secondary" onclick="document.getElementById('txn-entity-id').value='${id}';document.querySelector('[data-page=transactions]').click();loadEntityTxns()">💰 Transactions</button>
+      </div>`;
+  } catch(e) { body.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Persons
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadPersons(filter, search) {
+  const tbl = document.getElementById('persons-table');
+  loading(tbl);
+  // Update button states
+  ['persons-all','persons-sanc','persons-pep'].forEach(id => document.getElementById(id).classList.remove('active-btn'));
+  if (!filter) document.getElementById('persons-all').classList.add('active-btn');
+  else if (filter === 'sanctioned') document.getElementById('persons-sanc').classList.add('active-btn');
+  else if (filter === 'pep') document.getElementById('persons-pep').classList.add('active-btn');
+
+  let url = '/api/persons';
+  const params = [];
+  if (filter) params.push(`filter_type=${filter}`);
+  if (search) params.push(`search=${encodeURIComponent(search)}`);
+  if (params.length) url += '?' + params.join('&');
+  try {
+    const d = await api(url);
+    tbl.innerHTML = makeTable(
+      ['ID', 'Name', 'Nationality', 'DOB', 'Flags', 'Controlled Entities'],
+      d,
+      r => {
+        const entities = (r.controlledEntities || []).filter(e => e && e.id);
+        return `<td>${r.id}</td><td>${esc(r.name)}</td><td>${r.nationality || '–'}</td>
+          <td style="font-size:12px">${r.dob || '–'}</td>
+          <td>${personTags(r)}</td>
+          <td style="font-size:11px">${entities.length ? entities.map(e => `<a href="#" onclick="showEntity('${e.id}');return false">${esc(e.name)}</a>`).join(', ') : '<span style="color:var(--text3)">None</span>'}</td>`;
+      }
+    );
+  } catch(e) { tbl.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UBO Chains
+// ═══════════════════════════════════════════════════════════════════════════════
+async function findUBO() {
+  const id = document.getElementById('ubo-entity-id').value.trim();
+  if (!id) return;
+  const depth = document.getElementById('ubo-depth').value;
+  const el = document.getElementById('ubo-results');
+  loading(el);
+  try {
+    const d = await api(`/api/ubo/${id}?max_depth=${depth}`);
+    if (!d.ubos.length) { el.innerHTML = `<div class="warn-box">No UBO found for ${esc(id)}. The entity may not have ownership/control chains.</div>`; return; }
+    el.innerHTML = d.ubos.map(u => `
+      <div class="card">
+        <div class="flex flex-between flex-center">
+          <div>
+            <strong style="font-size:15px">${esc(u.name)}</strong>
+            <span style="color:var(--text2);margin-left:8px">${u.nationality}</span>
+            <span style="margin-left:8px">${u.isPEP ? '<span class="tag tag-pep">PEP</span>' : ''} ${u.isSanctioned ? '<span class="tag tag-sanctioned">SANCTIONED</span>' : ''}</span>
+          </div>
+          <span style="color:var(--accent);font-weight:600">${u.hops} hop(s)</span>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text2);display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+          ${u.chain.map((c, i) => {
+            const isLast = i === u.chain.length - 1;
+            const isPerson = c.labels && c.labels.includes('NaturalPerson');
+            const style = isPerson ? 'color:var(--purple);font-weight:600' : '';
+            return `<span style="${style}">${esc(c.name || c.id)}</span>${!isLast ? '<span style="color:var(--text3)">→</span>' : ''}`;
+          }).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Graph Explorer
+// ═══════════════════════════════════════════════════════════════════════════════
+let graphData = null, graphAnim = null;
+
+async function loadGraph() {
+  const id = document.getElementById('graph-entity-id').value.trim();
+  if (!id) return;
+  const depth = document.getElementById('graph-depth').value;
+  graphData = await api(`/api/graph/${id}?depth=${depth}`);
+  renderGraph();
+}
+
+function renderGraph() {
+  const canvas = document.getElementById('graph-canvas');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+
+  if (!graphData || !graphData.nodes.length) {
+    ctx.fillStyle = '#636c76'; ctx.font = '14px sans-serif';
+    ctx.fillText('No data — enter an entity ID and click Visualize', W/2 - 200, H/2);
+    return;
+  }
+
+  const nodes = graphData.nodes.map((n, i) => ({
+    ...n,
+    x: W/2 + Math.cos(i * 2.4) * Math.min(W, H) * 0.3 + (Math.random() - 0.5) * 80,
+    y: H/2 + Math.sin(i * 2.4) * Math.min(W, H) * 0.3 + (Math.random() - 0.5) * 80,
+    vx: 0, vy: 0
+  }));
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.id] = n);
+  const edges = graphData.edges.filter(e => nodeMap[e.source] && nodeMap[e.target]);
+
+  function nodeColor(n) {
+    if (n.isSanctioned) return '#cf222e';
+    if (n.isPEP) return '#8250df';
+    if (n.labels && n.labels.includes('NaturalPerson')) return '#636c76';
+    if (n.score >= 50) return '#bf8700';
+    return '#0969da';
+  }
+
+  if (graphAnim) cancelAnimationFrame(graphAnim);
+  let iter = 0;
+  function tick() {
+    nodes.forEach(a => {
+      nodes.forEach(b => {
+        if (a === b) return;
+        let dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx*dx + dy*dy) || 1;
+        if (d < 180) { const f = (180 - d) * 0.02; a.vx -= dx/d*f; a.vy -= dy/d*f; }
+      });
+      a.vx += (W/2 - a.x) * 0.001;
+      a.vy += (H/2 - a.y) * 0.001;
+    });
+    edges.forEach(e => {
+      const a = nodeMap[e.source], b = nodeMap[e.target];
+      if (!a || !b) return;
+      let dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const f = (d - 120) * 0.005;
+      a.vx += dx/d*f; a.vy += dy/d*f;
+      b.vx -= dx/d*f; b.vy -= dy/d*f;
+    });
+    nodes.forEach(n => {
+      n.vx *= 0.88; n.vy *= 0.88;
+      n.x += n.vx; n.y += n.vy;
+      n.x = Math.max(40, Math.min(W - 40, n.x));
+      n.y = Math.max(40, Math.min(H - 40, n.y));
+    });
+
+    ctx.clearRect(0, 0, W, H);
+    // Background
+    ctx.fillStyle = '#f8f9fb';
+    ctx.fillRect(0, 0, W, H);
+    // Edges
+    edges.forEach(e => {
+      const a = nodeMap[e.source], b = nodeMap[e.target];
+      if (!a || !b) return;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = e.type === 'CONTROLLED_BY' ? '#8250df' : '#0969da';
+      ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4; ctx.stroke(); ctx.globalAlpha = 1;
+      // Edge label
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      ctx.fillStyle = '#636c76'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      let lbl = e.type === 'CONTROLLED_BY' ? 'CTRL' : 'OWN';
+      if (e.percentage) lbl += ' ' + e.percentage.toFixed(0) + '%';
+      ctx.fillText(lbl, mx, my - 4);
+    });
+    // Nodes
+    nodes.forEach(n => {
+      const isPerson = n.labels && n.labels.includes('NaturalPerson');
+      const r = isPerson ? 7 : 12;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = nodeColor(n); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#1f2328'; ctx.font = '11px -apple-system, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText((n.name || n.id).slice(0, 24), n.x, n.y + r + 14);
+    });
+
+    iter++;
+    if (iter < 200) graphAnim = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Chat
+// ═══════════════════════════════════════════════════════════════════════════════
+function chatQ(question) {
+  document.getElementById('chat-input').value = question;
+  sendChat();
+}
+function renderMarkdown(text) {
+  // Convert markdown tables to HTML tables
+  let html = text;
+  // Tables
+  html = html.replace(/^(\|.+\|)\n(\|[\s\-:|]+\|)\n((?:\|.+\|\n?)+)/gm, (match, header, sep, body) => {
+    const headers = header.split('|').filter(c => c.trim());
+    const rows = body.trim().split('\n').map(r => r.split('|').filter(c => c.trim()));
+    let t = '<table><thead><tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr></thead><tbody>';
+    for (const row of rows) {
+      t += '<tr>' + row.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    }
+    return t + '</tbody></table>';
+  });
+  // Bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-size:12px">$1</code>');
+  // Newlines
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+function renderQueryBlock(db, query) {
+  if (!db || !query) return '';
+  const badge = db === 'cypher' ? 'neo4j' : 'sparql';
+  const label = db === 'cypher' ? 'Cypher (Neo4j)' : 'SPARQL (GraphDB)';
+  const qid = 'qb-' + Date.now();
+  return `<div class="query-block">
+    <div class="query-header">
+      <span><span class="db-badge ${badge}">${label}</span></span>
+      <button class="toggle-btn" onclick="document.getElementById('${qid}').classList.toggle('open');this.textContent=this.textContent==='Show Query'?'Hide Query':'Show Query'">Show Query</button>
+    </div>
+    <pre class="query-code" id="${qid}">${esc(query)}</pre>
+  </div>`;
+}
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const container = document.getElementById('chat-messages');
+  container.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+  container.innerHTML += `<div class="chat-msg bot" id="chat-loading"><div class="spinner" style="width:12px;height:12px"></div> Thinking...</div>`;
+  container.scrollTop = container.scrollHeight;
+  try {
+    const d = await api('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg})});
+    document.getElementById('chat-loading').remove();
+    let html = renderMarkdown(d.reply || 'No response.');
+    if (d.db && d.query) {
+      html += renderQueryBlock(d.db, d.query);
+    }
+    container.innerHTML += `<div class="chat-msg bot">${html}</div>`;
+  } catch(e) {
+    document.getElementById('chat-loading').remove();
+    container.innerHTML += `<div class="chat-msg bot" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+  container.scrollTop = container.scrollHeight;
+  input.focus();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Risk Analysis
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadRisk() {
+  const dist = await api('/api/risk/distribution');
+  const riskColors = {Critical:'#cf222e', High:'#d1242f', Medium:'#bf8700', Low:'#1a7f37', Clean:'#d0d7de'};
+  renderBarChart(document.getElementById('risk-dist-chart'),
+    dist.map(d => ({label: d.bucket, value: d.count, _c: d.bucket})),
+    {colorFn: i => riskColors[i._c] || '#0969da'});
+
+  const jurs = await api('/api/risk/jurisdictions');
+  document.getElementById('jur-heatmap').innerHTML = makeTable(
+    ['Jurisdiction', 'Name', 'Count', 'Avg Score', 'Max Score', 'High Risk'],
+    jurs,
+    r => `<td><strong>${r.jurisdiction}</strong></td><td style="font-size:12px">${esc(r.name)}</td>
+          <td>${r.count}</td>
+          <td class="${riskClass(r.avgScore)}">${num(r.avgScore, 0)}</td>
+          <td class="${riskClass(r.maxScore)}">${num(r.maxScore, 0)}</td>
+          <td>${r.highRiskCount > 0 ? `<span style="color:var(--red);font-weight:600">${r.highRiskCount}</span>` : '0'}</td>`
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Circular Ownership
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadRings() {
+  const el = document.getElementById('rings-list');
+  loading(el);
+  const d = await api('/api/rings');
+  if (!d.length) { el.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center">No circular ownership detected.</div>'; return; }
+  el.innerHTML = d.map(r => `
+    <div class="card">
+      <div class="flex flex-between flex-center">
+        <strong>Ring #${r.scc}</strong>
+        <span style="color:var(--red);font-weight:600">${r.size} entities</span>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        ${r.members.map(m => `<a href="#" onclick="showEntity('${m.id}');return false" style="font-size:13px">${esc(m.name)} <span style="color:var(--text3)">(${m.jurisdiction})</span></a>`).join(' <span style="color:var(--text3)">↔</span> ')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Transactions
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadTransactions() {
+  // Suspicious
+  const el = document.getElementById('suspicious-txns');
+  loading(el);
+  try {
+    const d = await api('/api/transactions/suspicious');
+    el.innerHTML = makeTable(
+      ['From', 'To', 'Amount', 'Currency', 'Date'],
+      d,
+      r => `<td><a href="#" onclick="showEntity('${r.fromId}');return false">${esc(r.fromName)}</a></td>
+            <td><a href="#" onclick="showEntity('${r.toId}');return false">${esc(r.toName)}</a></td>
+            <td style="font-weight:600">${num(r.amount, 2)}</td>
+            <td>${r.currency}</td><td style="font-size:12px">${r.date || ''}</td>`
+    );
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+
+  // Structuring
+  const el2 = document.getElementById('structuring-txns');
+  loading(el2);
+  try {
+    const d2 = await api('/api/transactions/structuring');
+    el2.innerHTML = makeTable(
+      ['From', 'To', '# Txns', 'Details'],
+      d2,
+      r => `<td><a href="#" onclick="showEntity('${r.fromId}');return false">${esc(r.fromName)}</a></td>
+            <td><a href="#" onclick="showEntity('${r.toId}');return false">${esc(r.toName)}</a></td>
+            <td style="color:var(--red);font-weight:600">${r.txns}</td>
+            <td style="font-size:11px">${(r.details||[]).map(d => '$' + num(d.amount, 2) + ' ' + d.currency).join(', ')}</td>`
+    );
+  } catch(e) { el2.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+async function loadEntityTxns() {
+  const id = document.getElementById('txn-entity-id').value.trim();
+  if (!id) return;
+  const el = document.getElementById('entity-txns');
+  loading(el);
+  try {
+    const d = await api(`/api/transactions/entity/${id}`);
+    el.innerHTML = makeTable(
+      ['Direction', 'Counterparty', 'Amount', 'Currency', 'Date', 'Suspicious'],
+      d,
+      r => `<td style="font-weight:600;color:${r.direction === 'OUT' ? 'var(--red)' : 'var(--green)'}">${r.direction}</td>
+            <td><a href="#" onclick="showEntity('${r.otherId}');return false">${esc(r.otherName)}</a></td>
+            <td>${num(r.amount, 2)}</td><td>${r.currency || ''}</td>
+            <td style="font-size:12px">${r.date || ''}</td>
+            <td>${r.isSuspicious ? '<span class="tag tag-sanctioned">⚠ SUSPICIOUS</span>' : ''}</td>`
+    );
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Shell Companies
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadShells() {
+  const el = document.getElementById('shells-table');
+  loading(el);
+  try {
+    const d = await api('/api/shells');
+    el.innerHTML = makeTable(
+      ['ID', 'Name', 'Jurisdiction', 'Category', 'Tier', 'Score', 'Subsidiaries', 'Active'],
+      d,
+      r => `<td><a href="#" onclick="showEntity('${r.id}');return false">${r.id}</a></td>
+            <td>${esc(r.name)}</td><td>${r.jurisdiction}</td>
+            <td style="font-size:11px">${r.category || ''}</td>
+            <td>${tierTag(r.riskTier)}</td>
+            <td class="${riskClass(r.score)}">${num(r.score, 0)}</td>
+            <td>${r.subsidiaries}</td>
+            <td>${r.isActive ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>'}</td>`
+    );
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GDS Analytics
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadGDS() {
+  // Summary cards
+  const cards = document.getElementById('gds-summary-cards');
+  loading(cards);
+  try {
+    const s = await api('/api/gds/summary');
+    cards.innerHTML = `
+      <div class="card kpi"><div class="kpi-value" style="color:var(--accent)">${s.wcc.components}</div><div class="kpi-label">WCC Components</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Largest: ${s.wcc.largestComponent}</div></div>
+      <div class="card kpi"><div class="kpi-value" style="color:var(--purple)">${s.louvain.communities}</div><div class="kpi-label">Louvain Communities</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Largest: ${s.louvain.largestCommunity}</div></div>
+      <div class="card kpi"><div class="kpi-value" style="color:var(--red)">${s.scc.rings}</div><div class="kpi-label">SCC Rings</div><div style="font-size:11px;color:var(--text3);margin-top:4px">${s.scc.entitiesInRings} entities</div></div>
+    `;
+  } catch(e) { cards.innerHTML = `<div class="card" style="color:var(--red)">${e.message}</div>`; }
+
+  loadGDSScores('pageRank');
+  loadCommunities();
+}
+
+async function loadGDSScores(sortBy) {
+  // Update buttons
+  ['gds-sort-pr','gds-sort-bt','gds-sort-cm'].forEach(id => document.getElementById(id).classList.remove('active-btn'));
+  if (sortBy === 'pageRank') document.getElementById('gds-sort-pr').classList.add('active-btn');
+  if (sortBy === 'betweenness') document.getElementById('gds-sort-bt').classList.add('active-btn');
+  if (sortBy === 'community') document.getElementById('gds-sort-cm').classList.add('active-btn');
+
+  const el = document.getElementById('gds-scores-table');
+  loading(el);
+  try {
+    const d = await api(`/api/gds/scores?sort_by=${sortBy}&limit=40`);
+    el.innerHTML = makeTable(
+      ['ID', 'Name', 'Jurisdiction', 'PageRank', 'Betweenness', 'Community', 'WCC', 'SCC', 'Risk'],
+      d,
+      r => `<td><a href="#" onclick="showEntity('${r.id}');return false">${r.id}</a></td>
+            <td>${esc(r.name)}</td><td>${r.jurisdiction}</td>
+            <td style="font-family:monospace;font-size:12px">${num(r.pageRank, 4)}</td>
+            <td style="font-family:monospace;font-size:12px">${num(r.betweenness, 1)}</td>
+            <td>${r.community != null ? '#' + r.community : '–'}</td>
+            <td>${r.wcc != null ? '#' + r.wcc : '–'}</td>
+            <td>${r.scc != null ? '#' + r.scc : '–'}</td>
+            <td class="${riskClass(r.riskScore)}">${num(r.riskScore, 0)}</td>`
+    );
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+async function loadCommunities() {
+  const el = document.getElementById('communities-list');
+  loading(el);
+  try {
+    const d = await api('/api/communities');
+    if (!d.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px">No communities with >2 members found.</div>'; return; }
+    el.innerHTML = d.map(c => `
+      <div class="card">
+        <div class="flex flex-between flex-center mb-8">
+          <strong>Community #${c.community}</strong>
+          <div>
+            <span style="color:var(--accent);font-weight:600">${c.size} entities</span>
+            ${c.highRiskCount > 0 ? `<span style="color:var(--red);margin-left:12px;font-weight:600">${c.highRiskCount} high-risk</span>` : ''}
+            <span style="color:var(--text3);margin-left:12px">Avg score: ${c.avgScore}</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${c.topMembers.map(m => `<a href="#" onclick="showEntity('${m.id}');return false" class="tag" style="background:var(--bg3);color:var(--text)">${esc(m.name)} <span style="color:var(--text3)">(${m.jurisdiction})</span></a>`).join('')}
+          ${c.size > 10 ? `<span class="tag" style="background:var(--bg3);color:var(--text3)">+${c.size - 10} more</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Cypher Console
+// ═══════════════════════════════════════════════════════════════════════════════
+const CYPHER_PRESETS = {
+  'top-risk': `MATCH (e:LegalEntity)\nWHERE e.kycRiskScore > 0\nRETURN e.id AS id, e.name AS name, e.jurisdiction AS jurisdiction,\n       e.kycRiskScore AS score, e.riskTier AS tier\nORDER BY score DESC LIMIT 20`,
+  'ubo': `MATCH path = (e:LegalEntity {id: 'ENTITY_0042'})\n      -[:DIRECTLY_OWNED_BY*0..6]->()\n      -[:CONTROLLED_BY]->(p:NaturalPerson)\nRETURN p.name AS ubo, p.nationality AS nationality,\n       p.isPEP AS isPEP, p.isSanctioned AS isSanctioned,\n       length(path) AS hops\nORDER BY hops`,
+  'rings': `MATCH (e:LegalEntity)\nWHERE e.sccComponentId IS NOT NULL\nWITH e.sccComponentId AS scc, collect(e.name) AS members\nWHERE size(members) > 1\nRETURN scc, members`,
+  'shells': `MATCH (e:LegalEntity)\nWHERE e.hasOperationalAddress = false\nRETURN e.id, e.name, e.jurisdiction, e.kycRiskScore, e.category\nORDER BY e.kycRiskScore DESC LIMIT 20`,
+  'structuring': `MATCH (a:LegalEntity)-[t:TRANSACTION]->(b:LegalEntity)\nWHERE t.amount > 9000 AND t.amount < 10000\nWITH a, b, count(t) AS txns\nWHERE txns >= 2\nRETURN a.name AS from, b.name AS to, txns\nORDER BY txns DESC LIMIT 20`,
+  'pep': `MATCH (e:LegalEntity)-[r:CONTROLLED_BY]->(pep:PoliticallyExposedPerson)\nRETURN e.name AS entity, e.jurisdiction AS jur,\n       pep.name AS pep, pep.nationality AS nationality, r.role AS role\nLIMIT 20`,
+  'schema': `CALL db.labels() YIELD label RETURN label ORDER BY label`,
+  'gds': `MATCH (e:LegalEntity)\nRETURN e.id AS id, e.name AS name,\n       e.pageRankScore AS pageRank,\n       e.betweennessScore AS betweenness,\n       e.louvainCommunityId AS community\nORDER BY e.pageRankScore DESC LIMIT 20`,
+};
+
+function setCypher(key) { document.getElementById('cypher-input').value = CYPHER_PRESETS[key] || ''; }
+
+async function runCypher() {
+  const q = document.getElementById('cypher-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('cypher-results');
+  el.style.display = 'block'; loading(el);
+  try {
+    const d = await api('/api/cypher', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q})});
+    if (!d.rows || !d.rows.length) { el.innerHTML = '<pre>(no results)</pre>'; return; }
+    const keys = Object.keys(d.rows[0]);
+    el.innerHTML = makeTable(keys, d.rows, r => keys.map(k => `<td>${typeof r[k] === 'object' ? JSON.stringify(r[k]) : esc(String(r[k] ?? ''))}</td>`).join(''));
+  } catch(e) { el.innerHTML = `<pre style="color:var(--red)">${esc(e.message)}</pre>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SPARQL Console
+// ═══════════════════════════════════════════════════════════════════════════════
+const SPARQL_PRESETS = {
+  'graphs': `SELECT ?graph (COUNT(*) AS ?triples)\nWHERE { GRAPH ?graph { ?s ?p ?o } }\nGROUP BY ?graph ORDER BY DESC(?triples)`,
+  'classes': `PREFIX owl: <http://www.w3.org/2002/07/owl#>\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nSELECT ?class ?label WHERE {\n  ?class a owl:Class .\n  ?class rdfs:label ?label .\n  FILTER(CONTAINS(STR(?class), "edmcouncil.org"))\n} ORDER BY ?label LIMIT 30`,
+  'properties': `PREFIX owl: <http://www.w3.org/2002/07/owl#>\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nSELECT ?prop ?type ?label WHERE {\n  GRAPH <http://kg/kyc/ontology> {\n    ?prop a ?type .\n    FILTER(?type IN (owl:ObjectProperty, owl:DatatypeProperty))\n    OPTIONAL { ?prop rdfs:label ?label }\n  }\n} ORDER BY ?type ?label`,
+  'mapping': `PREFIX owl: <http://www.w3.org/2002/07/owl#>\nSELECT ?s ?p ?o WHERE {\n  GRAPH <http://kg/mapping/fibo2glei> { ?s ?p ?o }\n}`,
+  'subclasses': `PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nPREFIX fibo-be: <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/>\nSELECT ?class ?label WHERE {\n  ?class rdfs:subClassOf* fibo-be:LegalPerson .\n  OPTIONAL { ?class rdfs:label ?label }\n} ORDER BY ?label`,
+};
+
+function setSparql(key) { document.getElementById('sparql-input').value = SPARQL_PRESETS[key] || ''; }
+
+async function runSparql() {
+  const q = document.getElementById('sparql-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('sparql-results');
+  el.style.display = 'block'; loading(el);
+  try {
+    const d = await api('/api/sparql', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q})});
+    if (d.type === 'ask') { el.innerHTML = `<pre>Result: ${d.result}</pre>`; return; }
+    if (!d.rows || !d.rows.length) { el.innerHTML = '<pre>(no results)</pre>'; return; }
+    const keys = Object.keys(d.rows[0]);
+    el.innerHTML = makeTable(keys, d.rows, r => keys.map(k => `<td style="font-size:12px;word-break:break-all">${esc(r[k] || '')}</td>`).join(''));
+  } catch(e) { el.innerHTML = `<pre style="color:var(--red)">${esc(e.message)}</pre>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Ontology Browser
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadOntology() {
+  const g = document.getElementById('ontology-graphs');
+  const s = document.getElementById('ontology-schema');
+  const c = document.getElementById('ontology-classes');
+  const r = document.getElementById('ontology-rels');
+  loading(g); loading(s); loading(c); loading(r);
+  try {
+    const graphs = await api('/api/graphdb/graphs');
+    g.innerHTML = graphs.length ? makeTable(['Named Graph', 'Triples'], graphs,
+      row => `<td style="font-size:12px;word-break:break-all">${esc(row.graph)}</td><td style="font-weight:600">${row.triples.toLocaleString()}</td>`) :
+      '<div style="color:var(--text3);padding:16px">No graphs found (GraphDB may be offline)</div>';
+
+    const schema = await api('/api/schema');
+    s.innerHTML = `
+      <h4 style="font-size:13px;margin-bottom:8px;color:var(--text2)">Node Labels</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+        ${schema.labels.map(l => `<span class="tag" style="background:${l.startsWith('n4sch__') || l.startsWith('_') ? 'var(--orange-bg);color:var(--orange)' : 'var(--accent-light);color:var(--accent)'}">${l}</span>`).join('')}
+      </div>
+      <h4 style="font-size:13px;margin-bottom:8px;color:var(--text2)">Relationship Types</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${schema.relationshipTypes.map(rt => `<span class="tag" style="background:${rt.startsWith('n4sch__') ? 'var(--orange-bg);color:var(--orange)' : 'var(--green-bg);color:var(--green)'}">${rt}</span>`).join('')}
+      </div>`;
+
+    const classes = await api('/api/ontology/classes');
+    c.innerHTML = makeTable(['Local Name', 'Label', 'Parent', 'URI'], classes,
+      row => `<td style="font-weight:600">${esc(row.localName)}</td>
+              <td style="font-size:12px">${row.label ? (Array.isArray(row.label) ? row.label.join(', ') : row.label) : '<span style="color:var(--text3)">–</span>'}</td>
+              <td style="font-size:12px">${esc(row.parentName || '–')}</td>
+              <td style="font-size:11px;word-break:break-all;color:var(--text3)">${esc(row.uri)}</td>`);
+
+    const rels = await api('/api/ontology/relationships');
+    r.innerHTML = makeTable(['Name', 'Domain', 'Range'], rels,
+      row => `<td style="font-weight:600">${esc(row.localName)}</td>
+              <td style="font-size:12px">${row.domainUri ? shortUri(row.domainUri) : '–'}</td>
+              <td style="font-size:12px">${row.rangeUri ? shortUri(row.rangeUri) : '–'}</td>`);
+  } catch(e) { g.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════════════════════════════════
+loadDashboard();
+
+// Populate jurisdiction dropdown
+api('/api/risk/jurisdictions').then(jurs => {
+  const sel = document.getElementById('entity-jur-filter');
+  jurs.forEach(j => { const o = document.createElement('option'); o.value = j.jurisdiction; o.textContent = `${j.jurisdiction} — ${j.name}`; sel.appendChild(o); });
+}).catch(() => {});
+
+// Health checks
+api('/api/kpis').then(() => { document.getElementById('neo4j-status').classList.add('badge-green'); }).catch(() => {
+  document.getElementById('neo4j-status').classList.remove('badge-green');
+  document.getElementById('neo4j-status').classList.add('badge-red');
+  document.getElementById('neo4j-status').textContent = 'Neo4j ✗';
+});
+api('/api/graphdb/graphs').then(() => { document.getElementById('graphdb-status').classList.add('badge-green'); }).catch(() => {
+  document.getElementById('graphdb-status').classList.remove('badge-green');
+  document.getElementById('graphdb-status').classList.add('badge-red');
+  document.getElementById('graphdb-status').textContent = 'GraphDB ✗';
+});
+</script>
+</body>
+</html>

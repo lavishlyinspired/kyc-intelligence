@@ -48,10 +48,16 @@ MODULES = [
      "graph": "http://kg/fibo/be/legal-persons", "name": "FIBO Legal Persons"},
     {"url": "https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/CorporateBodies/",
      "graph": "http://kg/fibo/be/corp-bodies",   "name": "FIBO Corporate Bodies"},
-    {"url": "https://spec.edmcouncil.org/fibo/ontology/BE/OwnershipAndControl/Ownership/",
-     "graph": "http://kg/fibo/be/ownership",     "name": "FIBO Ownership"},
-    {"url": "https://spec.edmcouncil.org/fibo/ontology/BE/OwnershipAndControl/Control/",
-     "graph": "http://kg/fibo/be/control",       "name": "FIBO Control"},
+    # FIBO reorganised Ownership & Control into separate modules (old monolithic
+    # URLs return 404 as of 2025). Use GitHub raw RDF/XML files instead.
+    {"url": "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/CorporateOwnership.rdf",
+     "graph": "http://kg/fibo/be/ownership",     "name": "FIBO Corporate Ownership", "fmt": "rdfxml"},
+    {"url": "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/OwnershipParties.rdf",
+     "graph": "http://kg/fibo/be/ownership",     "name": "FIBO Ownership Parties",   "fmt": "rdfxml"},
+    {"url": "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/CorporateControl.rdf",
+     "graph": "http://kg/fibo/be/control",       "name": "FIBO Corporate Control",   "fmt": "rdfxml"},
+    {"url": "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/ControlParties.rdf",
+     "graph": "http://kg/fibo/be/control",       "name": "FIBO Control Parties",     "fmt": "rdfxml"},
     {"url": "https://spec.edmcouncil.org/fibo/ontology/BE/Corporations/Corporations/",
      "graph": "http://kg/fibo/be/corporations",  "name": "FIBO Corporations"},
 
@@ -63,34 +69,38 @@ MODULES = [
 DATA_DIR = Path("data/fibo")
 
 
-def download(url: str, name: str) -> Path | None:
-    """Download a TTL module to `data/fibo/<slug>.ttl`. Return path or None."""
+def download(url: str, name: str, fmt: str = "turtle") -> tuple[Path, str] | None:
+    """Download a module to data/fibo/. Returns (path, content_type) or None."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     slug = name.lower().replace(" ", "-")
-    path = DATA_DIR / f"{slug}.ttl"
+    ext = "rdf" if fmt == "rdfxml" else "ttl"
+    path = DATA_DIR / f"{slug}.{ext}"
     if path.exists() and path.stat().st_size > 0:
-        return path
+        return path, ("application/rdf+xml" if fmt == "rdfxml" else "text/turtle")
+    accept = "application/rdf+xml" if fmt == "rdfxml" else "text/turtle"
     try:
-        r = requests.get(url, headers={"Accept": "text/turtle"}, timeout=60)
+        r = requests.get(url, headers={"Accept": accept}, timeout=60)
         if r.ok and r.text.strip():
-            path.write_text(r.text)
-            return path
+            path.write_bytes(r.content)
+            return path, accept
     except Exception as e:
         print(f"    download error: {e}")
     return None
 
 
 def load_module(gdb: GraphDBClient, module: dict) -> tuple[bool, str]:
-    """Try local file, fall back to direct URL. Return (success, detail)."""
-    path = download(module["url"], module["name"])
-    if path is not None:
+    """Try local file upload first, fall back to direct SPARQL LOAD."""
+    fmt = module.get("fmt", "turtle")
+    result = download(module["url"], module["name"], fmt)
+    if result is not None:
+        path, content_type = result
         size = path.stat().st_size
         with open(path, "rb") as f:
             r = requests.post(
                 gdb.graphs_endpoint,
                 params={"graph": module["graph"]},
                 data=f,
-                headers={"Content-Type": "text/turtle"},
+                headers={"Content-Type": content_type},
                 timeout=120,
             )
         if r.ok:

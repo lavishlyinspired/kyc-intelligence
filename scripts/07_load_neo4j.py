@@ -63,19 +63,77 @@ def init_n10s(neo: Neo4jClient) -> None:
 
 
 def import_fibo_ontology(neo: Neo4jClient) -> None:
-    """Pull in FIBO classes & properties so they're queryable in Cypher."""
-    print("→ Importing FIBO ontology structure via n10s.onto.import.fetch ...")
-    fibo_modules = [
-        "https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/",
-        "https://spec.edmcouncil.org/fibo/ontology/BE/OwnershipAndControl/Ownership/",
-        "https://spec.edmcouncil.org/fibo/ontology/BE/OwnershipAndControl/Control/",
+    """Import FIBO classes & properties so they're queryable in Cypher.
+
+    Prefers local cached files from data/fibo/ (downloaded by script 02).
+    Falls back to GitHub raw URLs when the cache is missing.
+    Uses n10s.onto.import.inline to avoid fetching unreliable remote URLs.
+    """
+    print("→ Importing FIBO ontology structure via n10s.onto.import.inline ...")
+
+    # (local_path, rdf_format, display_name)
+    FIBO_MODULES = [
+        (Path("data/fibo/fibo-legal-persons.ttl"),      "Turtle",  "LegalPersons"),
+        (Path("data/fibo/fibo-corporate-ownership.rdf"), "RDF/XML", "CorporateOwnership"),
+        (Path("data/fibo/fibo-ownership-parties.rdf"),  "RDF/XML", "OwnershipParties"),
+        (Path("data/fibo/fibo-corporate-control.rdf"),  "RDF/XML", "CorporateControl"),
+        (Path("data/fibo/fibo-control-parties.rdf"),    "RDF/XML", "ControlParties"),
     ]
-    for url in fibo_modules:
+
+    # GitHub raw fallback URLs (confirmed 200) keyed by local filename stem
+    FALLBACK_URLS = {
+        "fibo-legal-persons":
+            "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/LegalEntities/LegalPersons.rdf",
+        "fibo-corporate-ownership":
+            "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/CorporateOwnership.rdf",
+        "fibo-ownership-parties":
+            "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/OwnershipParties.rdf",
+        "fibo-corporate-control":
+            "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/CorporateControl.rdf",
+        "fibo-control-parties":
+            "https://raw.githubusercontent.com/edmcouncil/fibo/master/BE/OwnershipAndControl/ControlParties.rdf",
+    }
+
+    import requests as _req
+
+    total_triples = 0
+    for local_path, fmt, label in FIBO_MODULES:
+        rdf_content: str | None = None
+
+        # 1. Try local cache first
+        if local_path.exists() and local_path.stat().st_size > 0:
+            rdf_content = local_path.read_text(encoding="utf-8")
+        else:
+            # 2. Download from GitHub raw
+            fallback = FALLBACK_URLS.get(local_path.stem)
+            if fallback:
+                try:
+                    r = _req.get(fallback, timeout=60)
+                    if r.ok:
+                        local_path.parent.mkdir(parents=True, exist_ok=True)
+                        local_path.write_bytes(r.content)
+                        rdf_content = r.text
+                        fmt = "RDF/XML"  # GitHub raw files are always RDF/XML
+                except Exception as dl_err:
+                    print(f"  ✗ {label}: download failed: {dl_err}")
+                    continue
+
+        if not rdf_content:
+            print(f"  ✗ {label}: no local file and download failed — skipping")
+            continue
+
         try:
-            neo.execute("CALL n10s.onto.import.fetch($url, 'Turtle')", {"url": url})
-            print(f"  ✓ {url.split('/')[-2]}")
+            result = neo.query_one(
+                "CALL n10s.onto.import.inline($rdf, $fmt) YIELD triplesLoaded RETURN triplesLoaded",
+                {"rdf": rdf_content, "fmt": fmt},
+            )
+            n = result.get("triplesLoaded", 0) if result else 0
+            total_triples += n
+            print(f"  ✓ {label:<25} → {n:,} triples")
         except Exception as e:
-            print(f"  ✗ {url.split('/')[-2]}: {e}")
+            print(f"  ✗ {label}: {e}")
+
+    print(f"  Total ontology triples imported: {total_triples:,}")
 
 
 def create_indexes(neo: Neo4jClient) -> None:
@@ -178,7 +236,8 @@ def main() -> int:
         print(f"  Total nodes:         {neo.node_count():,}")
         print(f"  LegalEntity nodes:   {neo.node_count('LegalEntity'):,}")
         print(f"  NaturalPerson nodes: {neo.node_count('NaturalPerson'):,}")
-        print(f"  Class nodes (FIBO):  {neo.node_count('Class'):,}")
+        # n10s v5 stores ontology classes under 'n4sch__Class', not 'Class'
+        print(f"  Class nodes (FIBO):  {neo.node_count('n4sch__Class'):,}")
         print(f"  Labels: {neo.list_labels()}")
 
     return 0

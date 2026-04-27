@@ -16,6 +16,7 @@ Skill applied: sparql-exploration
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from textwrap import indent
@@ -84,7 +85,7 @@ def run_query(gdb: GraphDBClient, title: str, query: str) -> None:
     print(f"\n{'═' * 78}\n  {title}\n{'═' * 78}")
     print(indent(query.strip(), "    "))
     print()
-    if query.strip().upper().startswith("ASK"):
+    if re.search(r'\bASK\b', query, re.IGNORECASE):
         print(f"  → {gdb.ask(query)}")
         return
     rows = gdb.query(query)

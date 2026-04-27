@@ -1,10 +1,12 @@
 """
 Smoke tests for the GraphRAG agent.
 
-Run with:
-    ANTHROPIC_API_KEY=... pytest tests/test_agent.py -v -m integration
-or
-    OPENAI_API_KEY=... pytest tests/test_agent.py -v -m integration
+Run with any ONE of:
+    ANTHROPIC_API_KEY=sk-ant-...           pytest tests/test_agent.py -v -m integration
+    OPENAI_API_KEY=sk-...                  pytest tests/test_agent.py -v -m integration
+    DEEPSEEK_API_KEY=sk-...                pytest tests/test_agent.py -v -m integration
+    OLLAMA_MODEL=deepseek-v3.2:cloud       pytest tests/test_agent.py -v -m integration
+      (requires `ollama serve` and `ollama pull deepseek-v3.2:cloud`)
 """
 import os
 import sys
@@ -19,8 +21,9 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture(scope="module")
 def agent():
-    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")):
-        pytest.skip("No LLM API key set — skipping agent tests")
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
+            or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OLLAMA_MODEL")):
+        pytest.skip("No LLM configured — set ANTHROPIC_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, or OLLAMA_MODEL")
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     # Import the agent module dynamically (file starts with a digit)
     import importlib.util

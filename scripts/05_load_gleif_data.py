@@ -43,7 +43,7 @@ def fetch_entities(country: str, page_size: int = 50) -> list[dict]:
     r = requests.get(
         f"{GLEIF_API}/lei-records",
         params={
-            "filter[entity.legalJurisdiction]": country,
+            "filter[entity.jurisdiction]": country,
             "page[size]": page_size,
             "page[number]": 1,
         },

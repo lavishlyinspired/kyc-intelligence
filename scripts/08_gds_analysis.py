@@ -56,7 +56,8 @@ ALGOS = [
 def drop_if_exists(neo: Neo4jClient, name: str) -> None:
     res = neo.query("CALL gds.graph.exists($name) YIELD exists RETURN exists", {"name": name})
     if res and res[0]["exists"]:
-        neo.execute("CALL gds.graph.drop($name)", {"name": name})
+        # YIELD graphName suppresses the deprecated 'schema' field warning in GDS 2.5+
+        neo.execute("CALL gds.graph.drop($name) YIELD graphName", {"name": name})
         print(f"  · dropped existing projection '{name}'")
 
 

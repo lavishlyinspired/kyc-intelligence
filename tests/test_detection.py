@@ -81,9 +81,20 @@ def test_high_risk_jurisdictions_have_higher_avg_score(neo):
 
 def test_no_orphan_relationships(neo):
     rows = neo.query("""
-        MATCH (n) WHERE NOT (n)--() AND NOT n:GroundTruth AND NOT n:Resource
+        MATCH (n)
+        WHERE NOT (n)--()           // no relationships at all
+          AND NOT n:GroundTruth     // test sentinel
+          AND NOT n:Resource        // n10s RDF base node
+          // exclude n10s internal system nodes
+          AND NONE(lbl IN labels(n) WHERE lbl STARTS WITH '_' OR lbl STARTS WITH 'n4sch__')
         RETURN labels(n) AS labels, count(*) AS n
     """)
     isolated = {tuple(r["labels"]): r["n"] for r in rows}
-    # Some isolated nodes are tolerable (e.g. persons not yet linked)
-    assert sum(isolated.values()) < 50, f"Too many isolated nodes: {isolated}"
+
+    # LegalEntity nodes should almost never be orphaned
+    orphan_entities = sum(v for k, v in isolated.items() if "LegalEntity" in k)
+    assert orphan_entities < 10, f"Too many orphaned LegalEntity nodes: {orphan_entities} — {isolated}"
+
+    # NaturalPersons can be unlinked by design (200 generated, not all get relationships)
+    orphan_persons = sum(v for k, v in isolated.items() if "NaturalPerson" in k)
+    assert orphan_persons < 150, f"Too many orphaned NaturalPerson nodes: {orphan_persons} — {isolated}"

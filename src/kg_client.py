@@ -174,6 +174,11 @@ class Neo4jClient:
         with self.driver.session() as s:
             return [dict(r) for r in s.run(cypher, params or {})]
 
+    def query_one(self, cypher: str, params: dict | None = None) -> dict[str, Any] | None:
+        """Run a query and return the first row, or None if no results."""
+        rows = self.query(cypher, params)
+        return rows[0] if rows else None
+
     def execute(self, cypher: str, params: dict | None = None) -> None:
         with self.driver.session() as s:
             s.run(cypher, params or {}).consume()
@@ -186,8 +191,15 @@ class Neo4jClient:
 
     # ── Convenience ──────────────────────────────────────────────────────────
     def node_count(self, label: str | None = None) -> int:
-        q = f"MATCH (n:`{label}`) RETURN count(n) AS c" if label else "MATCH (n) RETURN count(n) AS c"
-        return self.query(q)[0]["c"]
+        if label:
+            # Use EXISTS to avoid the Neo4j "label not in DB" warning
+            rows = self.query(
+                "MATCH (n) WHERE $lbl IN labels(n) RETURN count(n) AS c",
+                {"lbl": label},
+            )
+        else:
+            rows = self.query("MATCH (n) RETURN count(n) AS c")
+        return rows[0]["c"] if rows else 0
 
     def list_labels(self) -> list[str]:
         return [r["label"] for r in self.query("CALL db.labels() YIELD label RETURN label ORDER BY label")]

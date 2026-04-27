@@ -1,0 +1,349 @@
+# baseURI: https://spec.edmcouncil.org/fibo/ontology/master/latest/FND/Relations/Relations/
+# imports: https://spec.edmcouncil.org/fibo/ontology/master/latest/FND/Utilities/AnnotationVocabulary/
+# imports: https://www.omg.org/spec/Commons/AnnotationVocabulary/
+# imports: https://www.omg.org/spec/Commons/ContextualDesignators/
+# imports: https://www.omg.org/spec/Commons/Designators/
+# imports: https://www.omg.org/spec/Commons/Documents/
+# imports: https://www.omg.org/spec/Commons/Organizations/
+# imports: https://www.omg.org/spec/Commons/RegulatoryAgencies/
+# imports: https://www.omg.org/spec/Commons/RolesAndCompositions/
+# imports: https://www.omg.org/spec/Commons/TextDatatype/
+
+@base <https://spec.edmcouncil.org/fibo/ontology/master/latest/FND/Relations/Relations/> .
+@prefix cmns-av: <https://www.omg.org/spec/Commons/AnnotationVocabulary/> .
+@prefix cmns-cxtdsg: <https://www.omg.org/spec/Commons/ContextualDesignators/> .
+@prefix cmns-doc: <https://www.omg.org/spec/Commons/Documents/> .
+@prefix cmns-dsg: <https://www.omg.org/spec/Commons/Designators/> .
+@prefix cmns-org: <https://www.omg.org/spec/Commons/Organizations/> .
+@prefix cmns-rga: <https://www.omg.org/spec/Commons/RegulatoryAgencies/> .
+@prefix cmns-rlcmp: <https://www.omg.org/spec/Commons/RolesAndCompositions/> .
+@prefix cmns-txt: <https://www.omg.org/spec/Commons/TextDatatype/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix fibo-fnd-rel-rel: <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> .
+@prefix fibo-fnd-utl-av: <https://spec.edmcouncil.org/fibo/ontology/FND/Utilities/AnnotationVocabulary/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/>
+	a owl:Ontology ;
+	rdfs:label "Relations Ontology" ;
+	dcterms:abstract "This ontology defines a set of general purpose relations for use in other FIBO ontology elements. These include a number of properties required for reuse across the foundations and business entities models." ;
+	dcterms:license """Copyright (c) 2013-2025 EDM Council, Inc.
+Copyright (c) 2013-2025 Object Management Group, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+		
+		See https://opensource.org/licenses/MIT.""" ;
+	owl:imports
+		<https://spec.edmcouncil.org/fibo/ontology/master/latest/FND/Utilities/AnnotationVocabulary/> ,
+		<https://www.omg.org/spec/Commons/AnnotationVocabulary/> ,
+		<https://www.omg.org/spec/Commons/ContextualDesignators/> ,
+		<https://www.omg.org/spec/Commons/Designators/> ,
+		<https://www.omg.org/spec/Commons/Documents/> ,
+		<https://www.omg.org/spec/Commons/Organizations/> ,
+		<https://www.omg.org/spec/Commons/RegulatoryAgencies/> ,
+		<https://www.omg.org/spec/Commons/RolesAndCompositions/> ,
+		<https://www.omg.org/spec/Commons/TextDatatype/>
+		;
+	owl:versionIRI <https://spec.edmcouncil.org/fibo/ontology/master/latest/FND/Relations/Relations/> ;
+	skos:changeNote
+		"The http://www.omg.org/spec/EDMC-FIBO/FND/20170201/Relations/Relations.rdf version of this ontology was modified per the FIBO 2.0 RFC to include additional properties and the linkage to LCC." ,
+		"""The http://www.omg.org/spec/FIBO/Foundations/20130601/Relations/Relations.owl version of the ontology submitted with the FIBO FND RFC, was revised in advance of the September 2013 New Brunswick, NJ meeting, as follows:
+	(1) to use slash style URI/IRIss (also called 303 URIs, vs. hash style) as required to support server side processing 
+	(2) to use version-independent IRIs for all definitions internally as opposed to version-specific IRIs
+	(3) to change the file suffix from .owl to .rdf to increase usability in RDF tools
+	(4) to use 4-level abbreviations and corresponding namespace prefixes for all FIBO ontologies, reflecting a family/specification/module/ontology structure
+	(5) to incorporate changes to the specification metadata to support documentation at the family, specification, module, and ontology level, similar to the abbreviations
+	(6) to move the ontology from the Utilities module to an independent Relations module
+	(7) to revise a number of definitions, per discussion with various stakeholders.
+	(8) to augment the definitions to include entity names from Business Entities.""" ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to eliminate deprecations that are more than 6 months old and to replace content that is now available in the OMG Commons Ontology Library (Commons) v1.1 (FND-380)." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to eliminate elements that have been deprecated for more than 3 quarters (FND-399)." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to eliminate elements that have been deprecated for several quarters (FND-386)." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to replace additional content that is now available in the OMG Commons Ontology Library (Commons) v1.1 (FND-380)." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to replace additional content that is now available in the OMG Commons Ontology Library (Commons) v1.2 (FND-389)." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of the ontology was modified to use the Commons Ontology Library (Commons) Annotation Vocabulary rather than the OMG's Specification Metadata vocabulary." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified per the issue resolutions identified in the FIBO FND 1.0 FTF report and in https://spec.edmcouncil.org/fibo/ontology/FND/1.0/AboutFND-1.0/. It was further revised in FTF 2 resulting in https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified per the issue resolutions identified in the FIBO FND 1.2 RTF report." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to add Reference as a superclass of Name and use the hasTextValue property as the superproperty of certain data properties." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to address hygiene issues with respect to text formatting." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to clean up references to external dictionaries that don't meet FIBO policies, eliminate ambiguity where possible, eliminate the superproperties of produces and is produced by, whose semantics are different from their parent properties, and improve ISO 704 compliance of definitions." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to eliminate deprecated elements." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to eliminate duplication with concepts in LCC and remove the unused hasDispositionDate property, whose semantics were unclear at best." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to incorporate evaluates and isEvaluatedBy, and to loosen constraints on hasName properties to allow multi-lingual names." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to loosen constraints on properties using xsd:dateTime in their range to allow for more flexible representation, and to add properties including produces, isProducedBy." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to move hasAcquisitionDate to Financial Dates to improve usability and simplify reasoning, to eliminate circular definitions, to deprecate fibo-fnd-rel-rel;hasTag in favor of the simpler LCC property of the same name, to loosen domain restrictions on some properties which were too narrowly specified, and to add two new properties, describes and isDescribedBy, which are more appropriate for certain cases where we were using characterizes and isCharacterizedBy." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to move the property 'exchanges' to FND given that it could be applied more generally than with respect to swaps only." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to move the property, 'is conferred on' to the Legal Capacity ontology and to use the Commons Ontology Library (Commons) rather than the OMG's Languages, Countries and Codes (LCC), eliminating redundancies in FIBO as appropriate." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to remove the deprecated hasTag property." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was modified to rename (migrate) the hasDefinition property to isDefinedIn." ,
+		"The https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations.rdf version of this ontology was revised to add the appliesTo object property in support of the IND RFC."
+		;
+	fibo-fnd-utl-av:hasMaturityLevel fibo-fnd-utl-av:Release ;
+	cmns-av:copyright
+		"Copyright (c) 2013-2025 EDM Council, Inc." ,
+		"Copyright (c) 2013-2025 Object Management Group, Inc."
+		;
+	.
+
+fibo-fnd-rel-rel:Referent
+	a owl:Class ;
+	rdfs:label "referent" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "something that another concept stands for, exemplifies, symbolizes, or otherwise mentions" ;
+	.
+
+fibo-fnd-rel-rel:causes
+	a owl:ObjectProperty ;
+	rdfs:label "causes" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "relationship between an event or set of events or factors (the cause) and a second event, phenomenon, situation, or result (the effect), where the second event or outcome is understood as a consequence of the first" ;
+	.
+
+fibo-fnd-rel-rel:confers
+	a owl:ObjectProperty ;
+	rdfs:label "confers" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "grants or bestows by virtue of some authority" ;
+	cmns-av:explanatoryNote "This property should be read as describing the conferral of some legal power or duty, some commitment or some social construct, and is a property of some social construct such as an agreement or some legal authority. These concepts, which would describe the kind of thing of which this is a property, and the kinds of thing in terms of which this property is framed, are outside the scope of this mode land so are not shown." ;
+	cmns-av:synonym "invests with" ;
+	.
+
+fibo-fnd-rel-rel:controls
+	a owl:ObjectProperty ;
+	rdfs:label "controls" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "exercises authority or influence over" ;
+	.
+
+fibo-fnd-rel-rel:embodies
+	a owl:ObjectProperty ;
+	rdfs:label "embodies" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "is an expression of, gives a tangible or visible form to (an idea, quality, or feeling), makes concrete and perceptible" ;
+	.
+
+fibo-fnd-rel-rel:evaluates
+	a owl:ObjectProperty ;
+	rdfs:subPropertyOf cmns-cxtdsg:appliesTo ;
+	rdfs:label "evaluates" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "assesses the nature, quality, or ability of someone or something" ;
+	.
+
+fibo-fnd-rel-rel:exchanges
+	a owl:ObjectProperty ;
+	rdfs:label "exchanges" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "gives something in return something else" ;
+	.
+
+fibo-fnd-rel-rel:exemplifies
+	a owl:ObjectProperty ;
+	rdfs:label "exemplifies" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "is a concrete realization or example of" ;
+	cmns-av:adaptedFrom "http://www.merriam-webster.com/dictionary/exemplify"^^xsd:anyURI ;
+	.
+
+fibo-fnd-rel-rel:generates
+	a owl:ObjectProperty ;
+	rdfs:label "generates" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "produces through the application of one or more mathematical or logical steps or rules" ;
+	.
+
+fibo-fnd-rel-rel:hasAlias
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf cmns-dsg:hasTextualName ;
+	rdfs:label "has alias" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "indicates an alternate name of by which something is known" ;
+	.
+
+fibo-fnd-rel-rel:hasCommonName
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf cmns-dsg:hasTextualName ;
+	rdfs:label "has common name" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "indicates a name by which something is frequently referred, without reference to any formal usage or structure" ;
+	.
+
+fibo-fnd-rel-rel:hasDesignation
+	a owl:ObjectProperty ;
+	rdfs:label "has designation" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "relates an individual or organization to a position, role, or other designation" ;
+	.
+
+fibo-fnd-rel-rel:hasFormalName
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf cmns-dsg:hasTextualName ;
+	rdfs:label "has formal name" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "indicates a name by which something is known for some official purpose or context, or which is structured in some way such as to always follow the same format regardless of usage" ;
+	.
+
+fibo-fnd-rel-rel:hasLegalName
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf fibo-fnd-rel-rel:hasFormalName ;
+	rdfs:label "has legal name" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "specifies the name used to refer to a party in legal communications" ;
+	.
+
+fibo-fnd-rel-rel:hasTag
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf cmns-txt:hasTextValue ;
+	rdfs:label "has tag" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	rdfs:range xsd:string ;
+	skos:definition "combination of alphanumeric characters corresponding to a label for something" ;
+	skos:note "Text-valued tags may be useful for automated transformation or encoding systems, such as those used to produce IETF compliant language tags in XML. Such tags are required to be string-valued in FIBO, but not language-tagged strings." ;
+	.
+
+fibo-fnd-rel-rel:holds
+	a owl:ObjectProperty ;
+	rdfs:label "holds" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "is the relationship between a party and something it possesses, or over which it exercises some ownership or control or has at its discretion the ability to dispose of it as it sees fit" ;
+	.
+
+fibo-fnd-rel-rel:involves
+	a owl:ObjectProperty ;
+	rdfs:label "involves" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "(of a situation or event) includes (something) as a necessary part or result" ;
+	.
+
+fibo-fnd-rel-rel:isCausedBy
+	a owl:ObjectProperty ;
+	rdfs:label "is caused by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:causes ;
+	skos:definition "is the relationship between an event (the effect) and a second event (the cause), where the first event is understood as a consequence of the second; also, the relationship between a set of factors (causes) and a phenomenon (the effect)" ;
+	.
+
+fibo-fnd-rel-rel:isConferredBy
+	a owl:ObjectProperty ;
+	rdfs:label "is conferred by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:confers ;
+	skos:definition "a relationship between a right or obligation and the vehicle, such as an agreement or contract, that vests (or confers) said right or obligation" ;
+	cmns-av:explanatoryNote "This property should be read as describing some legal power or duty, some commitment or some social construct being conferred as a result of some social construct such as an agreement or some legal authority. These concepts, which would describe the kind of thing of which this is a property, and the kinds of thing in terms of which this property is framed, are outside the scope of this model and so are not shown." ;
+	.
+
+fibo-fnd-rel-rel:isControlledBy
+	a owl:ObjectProperty ;
+	rdfs:label "is controlled by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:controls ;
+	skos:definition "is influenced, managed, or directed by" ;
+	.
+
+fibo-fnd-rel-rel:isEvaluatedBy
+	a owl:ObjectProperty ;
+	rdfs:label "is evaluated by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:evaluates ;
+	skos:definition "is ascertained or determined by" ;
+	.
+
+fibo-fnd-rel-rel:isExemplifiedBy
+	a owl:ObjectProperty ;
+	rdfs:label "is exemplified by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:exemplifies ;
+	skos:definition "is made concrete or is realized by" ;
+	.
+
+fibo-fnd-rel-rel:isGeneratedBy
+	a owl:ObjectProperty ;
+	rdfs:label "is generated by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:generates ;
+	skos:definition "identifies some party or something that produces something via some equation, logic, or rules" ;
+	.
+
+fibo-fnd-rel-rel:isHeldBy
+	a owl:ObjectProperty ;
+	rdfs:label "is held by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:holds ;
+	skos:definition "indicates the party that possesses and has at least partial control of something, regardless of ownership" ;
+	.
+
+fibo-fnd-rel-rel:isIssuedBy
+	a owl:ObjectProperty ;
+	rdfs:subPropertyOf cmns-org:isProvidedBy ;
+	rdfs:label "is issued by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "indicates a functional entity or party responsible for circulating, distributing, or publishing something" ;
+	.
+
+fibo-fnd-rel-rel:isMandatedBy
+	a owl:ObjectProperty ;
+	rdfs:subPropertyOf fibo-fnd-rel-rel:isConferredBy ;
+	rdfs:label "is mandated by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "relates a responsibility, capacity, or action to that which requires it" ;
+	.
+
+fibo-fnd-rel-rel:isProducedBy
+	a owl:ObjectProperty ;
+	rdfs:label "is produced by" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:produces ;
+	skos:definition "identifies the producer that fabricates, manufactures or otherwise creates something through some production process" ;
+	.
+
+fibo-fnd-rel-rel:issues
+	a owl:ObjectProperty ;
+	rdfs:subPropertyOf cmns-org:provides ;
+	rdfs:label "issues" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:isIssuedBy ;
+	skos:definition "officially makes something available" ;
+	.
+
+fibo-fnd-rel-rel:mandates
+	a owl:ObjectProperty ;
+	rdfs:subPropertyOf fibo-fnd-rel-rel:confers ;
+	rdfs:label "mandates" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	owl:inverseOf fibo-fnd-rel-rel:isMandatedBy ;
+	skos:definition "relates something to a commitment, contract, law, obligation, requirement, regulation, or similar concept that requires it" ;
+	.
+
+fibo-fnd-rel-rel:produces
+	a owl:ObjectProperty ;
+	rdfs:label "produces" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "creates through a fabrication, manufacturing or production process" ;
+	.
+
+fibo-fnd-rel-rel:wasFormerlyKnownAs
+	a owl:DatatypeProperty ;
+	rdfs:subPropertyOf cmns-txt:hasTextValue ;
+	rdfs:label "was formerly known as" ;
+	rdfs:isDefinedBy <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> ;
+	skos:definition "indicates a name by which something was known in the past" ;
+	.
+
+cmns-cxtdsg:isApplicableIn
+	a owl:ObjectProperty ;
+	cmns-av:explanatoryNote "The context may include the setting in which something is defined, expressed, or represented." ;
+	.
+
+cmns-dsg:isSignifiedBy
+	a owl:ObjectProperty ;
+	cmns-av:explanatoryNote "'is signified by' relates a concept to some textual or other symbol which is intended to convey the sense of that concept or to some form of words that sets out the meaning of that concept." ;
+	.
+

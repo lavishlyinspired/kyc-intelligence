@@ -10,11 +10,20 @@ Architecture
   return structured data.
 - 1 fallback `general_graph_question` tool that uses GraphCypherQAChain to
   let the LLM write its own read-only Cypher for open questions.
-- Auto-selects Anthropic Claude → OpenAI GPT-4o → fail with helpful message.
+- Auto-selects: Anthropic Claude → OpenAI GPT-4o → DeepSeek V3 (cloud API) → Ollama (local) → fail.
+- DeepSeek cloud and Ollama both use the OpenAI-compatible REST API, so no extra package is needed.
 
 Skill applied: graphrag-agent
 
     python scripts/09_graphrag_agent.py "Who really owns ENTITY_0123?"
+
+LLM priority (set the matching variable in .env):
+    ANTHROPIC_API_KEY  → claude-sonnet-4-5 (default)
+    OPENAI_API_KEY     → gpt-4o (default)
+    DEEPSEEK_API_KEY   → deepseek-chat  (= DeepSeek V3 cloud at api.deepseek.com)
+    OLLAMA_MODEL       → any Ollama model, e.g. deepseek-v3.2:cloud (no API key needed)
+                         Make sure `ollama serve` is running and the model is pulled:
+                           ollama pull deepseek-v3.2:cloud
 """
 from __future__ import annotations
 
@@ -29,24 +38,61 @@ load_dotenv()
 
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+try:
+    from langchain.agents import create_agent as create_react_agent  # LangGraph >= 1.0
+except ImportError:
+    from langgraph.prebuilt import create_react_agent  # LangGraph < 1.0
 
 from src.kg_client import Neo4jClient
 
-# ─── LLM selection (Anthropic preferred, then OpenAI) ────────────────────────
+# ─── LLM selection: Anthropic → OpenAI → DeepSeek (cloud) ───────────────────
 def get_llm():
     if os.getenv("ANTHROPIC_API_KEY"):
         from langchain_anthropic import ChatAnthropic
         model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
         print(f"  Using Anthropic: {model}")
         return ChatAnthropic(model=model, temperature=0)
+
     if os.getenv("OPENAI_API_KEY"):
         from langchain_openai import ChatOpenAI
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
         print(f"  Using OpenAI: {model}")
         return ChatOpenAI(model=model, temperature=0)
+
+    if os.getenv("DEEPSEEK_API_KEY"):
+        # DeepSeek cloud: OpenAI-compatible API, no extra package needed.
+        from langchain_openai import ChatOpenAI
+        model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # deepseek-chat = DeepSeek V3
+        print(f"  Using DeepSeek cloud: {model}")
+        return ChatOpenAI(
+            model=model,
+            temperature=0,
+            api_key=os.environ["DEEPSEEK_API_KEY"],
+            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        )
+
+    if os.getenv("OLLAMA_MODEL"):
+        # Ollama local server: OpenAI-compatible at http://localhost:11434/v1
+        # No API key required — pass a dummy string.
+        # Pull the model first:  ollama pull deepseek-v3.2:cloud
+        from langchain_openai import ChatOpenAI
+        model = os.environ["OLLAMA_MODEL"]          # e.g. deepseek-v3.2:cloud
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        print(f"  Using Ollama (local): {model}  @ {base_url}")
+        return ChatOpenAI(
+            model=model,
+            temperature=0,
+            api_key="ollama",   # Ollama ignores the key; a non-empty string is required
+            base_url=base_url,
+        )
+
     raise RuntimeError(
-        "No LLM API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env"
+        "No LLM configured. Set ONE of the following in .env:\n"
+        "  ANTHROPIC_API_KEY   → Anthropic Claude\n"
+        "  OPENAI_API_KEY      → OpenAI GPT-4o\n"
+        "  DEEPSEEK_API_KEY    → DeepSeek V3 cloud (platform.deepseek.com)\n"
+        "  OLLAMA_MODEL        → Ollama local, e.g. deepseek-v3.2:cloud\n"
+        "                        (run: ollama pull deepseek-v3.2:cloud)"
     )
 
 
