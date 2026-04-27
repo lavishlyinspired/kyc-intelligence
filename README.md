@@ -46,8 +46,14 @@ python scripts/09_graphrag_agent.py            # Start the chat agent
 pytest -m integration -v
 
 # 6. UI
-streamlit run dashboard/app.py
-jupyter lab notebooks/01_exploration.ipynb
+#streamlit run dashboard/app.py
+#jupyter lab notebooks/01_exploration.ipynb
+
+
+#New UI
+cd /Users/akash/KG_Projects/KG_GraphDB_Neo4j/KG_Finance/finance-Intelligence-Projects/kyc-intelligence
+source /Users/akash/KG_Projects/KG_GraphDB_Neo4j/KG_Finance/.venv/bin/activate
+uvicorn dashboard.api:app --reload --port 8000
 ```
 
 ---

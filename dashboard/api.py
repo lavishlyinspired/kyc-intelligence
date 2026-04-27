@@ -499,12 +499,47 @@ async def ontology_relationships():
 from dashboard.chat_engine import process_chat
 
 
+class AgentChatRequest(BaseModel):
+    message: str
+    session_id: str = "default"
+
+
+class ResetSessionRequest(BaseModel):
+    session_id: str = "default"
+
+
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
+    """Legacy pattern-matching chat (kept for backward compatibility)."""
     msg = req.message.strip()
     if not msg:
         raise HTTPException(400, "Empty message")
     return process_chat(msg)
+
+
+@app.post("/api/agent/chat")
+async def agent_chat(req: AgentChatRequest):
+    """Agentic chat endpoint — LangGraph ReAct agent with conversation memory.
+    Supports follow-up questions within the same session_id."""
+    msg = req.message.strip()
+    if not msg:
+        raise HTTPException(400, "Empty message")
+    try:
+        from dashboard.agent import process_agent_chat
+        return process_agent_chat(msg, session_id=req.session_id)
+    except RuntimeError as e:
+        # LLM not configured
+        raise HTTPException(503, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Agent error: {str(e)}")
+
+
+@app.post("/api/agent/reset")
+async def agent_reset(req: ResetSessionRequest):
+    """Reset conversation memory for a session."""
+    from dashboard.agent import reset_session
+    reset_session(req.session_id)
+    return {"status": "ok", "session_id": req.session_id}
 
 
 # ─── SPARQL pass-through (read-only) ─────────────────────────────────────────

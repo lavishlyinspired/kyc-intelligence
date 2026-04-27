@@ -369,19 +369,29 @@ button.secondary.active-btn { background: var(--accent-light); color: var(--acce
     </div>
     <!-- Main chat area -->
     <div class="chat-main">
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);border-radius:8px 8px 0 0;font-size:13px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="agent-mode-toggle" onchange="toggleAgentMode()" checked>
+          <span id="agent-mode-label"><strong>🤖 Agent Mode</strong> (ask anything, follow-ups)</span>
+        </label>
+        <span style="color:var(--text3);font-size:11px" id="session-indicator">Session: default</span>
+        <button onclick="resetSession()" style="margin-left:auto;font-size:11px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;cursor:pointer" title="Clear conversation memory">🔄 New Session</button>
+      </div>
       <div class="chat-messages" id="chat-messages">
         <div class="chat-msg bot">
-          <strong>KYC Investigation Assistant</strong><br><br>
-          I can query both <strong>Neo4j</strong> (Cypher) and <strong>GraphDB</strong> (SPARQL). I'll show you the exact query I execute.<br><br>
-          Use the sidebar buttons or type your own question. Examples:<br>
-          • "Who owns ENTITY_0042?"<br>
-          • "FIBO ownership classes"<br>
-          • "Top 10 risk entities"<br><br>
-          Type <strong>help</strong> for all available commands.
+          <strong>KYC Investigation Assistant</strong> <span style="font-size:11px;color:var(--text3)" id="mode-badge">🤖 Agent Mode</span><br><br>
+          I'm powered by a <strong>LangGraph ReAct agent</strong> with 20 specialized tools querying <strong>Neo4j</strong> and <strong>GraphDB</strong>.<br><br>
+          <strong>Ask me anything:</strong><br>
+          • "Who really owns ENTITY_0042 and are they sanctioned?"<br>
+          • "Compare the risk profiles of all entities in the Cayman Islands"<br>
+          • "What are the money laundering red flags for ENTITY_0303?"<br>
+          • "How does FIBO model corporate ownership?"<br><br>
+          I support <strong>follow-up questions</strong> — ask clarifying questions and I'll remember the context.<br>
+          Toggle off Agent Mode for the legacy pattern-matching engine.
         </div>
       </div>
       <div class="chat-input-row">
-        <input type="text" id="chat-input" placeholder="Ask about entities, ownership, risk, ontology..." onkeydown="if(event.key==='Enter')sendChat()">
+        <input type="text" id="chat-input" placeholder="Ask anything about entities, ownership, risk, compliance..." onkeydown="if(event.key==='Enter')sendChat()">
         <button onclick="sendChat()">Send</button>
       </div>
     </div>
@@ -995,12 +1005,33 @@ async function sendChat() {
   container.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
   container.innerHTML += `<div class="chat-msg bot" id="chat-loading"><div class="spinner" style="width:12px;height:12px"></div> Thinking...</div>`;
   container.scrollTop = container.scrollHeight;
+
+  const isAgent = document.getElementById('agent-mode-toggle').checked;
+
   try {
-    const d = await api('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg})});
-    document.getElementById('chat-loading').remove();
-    let html = renderMarkdown(d.reply || 'No response.');
-    if (d.db && d.query) {
-      html += renderQueryBlock(d.db, d.query);
+    let html;
+    if (isAgent) {
+      const d = await api('/api/agent/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: msg, session_id: window._chatSessionId || 'default'})
+      });
+      document.getElementById('chat-loading').remove();
+      html = renderMarkdown(d.reply || 'No response.');
+      if (d.tools_used && d.tools_used.length > 0) {
+        html += `<div style="margin-top:8px;font-size:11px;color:var(--text3)">🔧 Tools used: ${d.tools_used.join(', ')}</div>`;
+      }
+    } else {
+      const d = await api('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: msg})
+      });
+      document.getElementById('chat-loading').remove();
+      html = renderMarkdown(d.reply || 'No response.');
+      if (d.db && d.query) {
+        html += renderQueryBlock(d.db, d.query);
+      }
     }
     container.innerHTML += `<div class="chat-msg bot">${html}</div>`;
   } catch(e) {
@@ -1009,6 +1040,32 @@ async function sendChat() {
   }
   container.scrollTop = container.scrollHeight;
   input.focus();
+}
+
+// Agent mode helpers
+window._chatSessionId = 'session-' + Date.now();
+
+function toggleAgentMode() {
+  const on = document.getElementById('agent-mode-toggle').checked;
+  document.getElementById('agent-mode-label').innerHTML = on
+    ? '<strong>🤖 Agent Mode</strong> (ask anything, follow-ups)'
+    : '<strong>📋 Pattern Mode</strong> (fast, deterministic)';
+  document.getElementById('mode-badge').textContent = on ? '🤖 Agent Mode' : '📋 Pattern Mode';
+  document.getElementById('session-indicator').style.display = on ? '' : 'none';
+}
+
+async function resetSession() {
+  try {
+    await api('/api/agent/reset', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: window._chatSessionId || 'default'})
+    });
+  } catch(e) { /* ignore */ }
+  window._chatSessionId = 'session-' + Date.now();
+  document.getElementById('session-indicator').textContent = 'Session: ' + window._chatSessionId.slice(-8);
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = `<div class="chat-msg bot">🔄 Session reset. Conversation memory cleared. Ask a new question!</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

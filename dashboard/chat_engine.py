@@ -1121,9 +1121,8 @@ def _handle_same_controller_diff_risk(msg: str) -> tuple[str, str, str]:
     q = """MATCH (p:NaturalPerson)<-[:CONTROLLED_BY]-(e:LegalEntity)
 WITH p, collect(e) AS entities
 WHERE size(entities) >= 2
-WITH p, entities,
-     min([e IN entities | e.kycRiskScore]) AS minRisk,
-     max([e IN entities | e.kycRiskScore]) AS maxRisk
+UNWIND entities AS ent
+WITH p, entities, min(ent.kycRiskScore) AS minRisk, max(ent.kycRiskScore) AS maxRisk
 WHERE maxRisk - minRisk >= 30
 RETURN p.id AS id, p.name AS name, p.nationality AS nationality,
        p.isPEP AS isPEP, p.isSanctioned AS isSanctioned,
@@ -1198,7 +1197,7 @@ SELECT ?class ?label (COUNT(?instance) AS ?instanceCount) WHERE {
 ORDER BY DESC(?instanceCount)
 LIMIT 30"""
     rows, sparql = _run_sparql(q)
-    with_instances = sum(1 for r in rows if r.get("instanceCount", 0) > 0)
+    with_instances = sum(1 for r in rows if int(r.get("instanceCount", 0)) > 0)
     lines = [f"**Ontology Coverage** — {with_instances}/{len(rows)} classes have instances:\n", _fmt_rows_table(rows)]
     return "\n".join(lines), "sparql", sparql
 
