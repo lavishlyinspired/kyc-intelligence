@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from langchain_core.tools import tool
+from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -42,25 +43,602 @@ from src.kg_client import Neo4jClient, GraphDBClient
 _neo = Neo4jClient()
 _gdb = GraphDBClient()
 
+# ─── Vector Store (lazy init) ─────────────────────────────────────────────────
+_vector_store = None
+
+
+def _get_vector_store():
+    """Lazy-init Neo4j vector store with Ollama embeddings."""
+    global _vector_store
+    if _vector_store is None:
+        try:
+            from langchain_neo4j import Neo4jVector
+            from langchain_ollama import OllamaEmbeddings
+
+            ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").replace("/v1", "")
+            embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=ollama_url)
+
+            _vector_store = Neo4jVector.from_existing_index(
+                embeddings,
+                url=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+                username=os.getenv("NEO4J_USER", "neo4j"),
+                password=os.getenv("NEO4J_PASSWORD", "kycpassword123"),
+                index_name="entity_embeddings",
+                text_node_property="text",
+                embedding_node_property="embedding",
+                search_type="hybrid",
+                keyword_index_name="keyword",
+            )
+        except Exception:
+            _vector_store = None
+    return _vector_store
+
+
+# ─── Diffbot (lazy init) ─────────────────────────────────────────────────────
+_diffbot_transformer = None
+
+
+# Diffbot emits free-form labels (Organization / Person / Bank / Country / …).
+# The KYC ontology only knows :LegalEntity and :NaturalPerson, so we must
+# remap Diffbot output back onto the ontology and merge into existing GLEIF /
+# UK-PSC / ICIJ nodes by name. Otherwise enrichment creates orphan clusters.
+DIFFBOT_ORG_LABELS = (
+    "Organization", "Company", "Corporation", "Business",
+    "Bank", "FinancialOrganization", "GovernmentOrganization",
+    "EducationalOrganization", "NonProfitOrganization",
+    "PoliticalParty", "MusicGroup", "SportsTeam",
+)
+DIFFBOT_PERSON_LABELS = ("Person",)
+# Map Diffbot-style relationship types onto our FIBO-aligned vocabulary.
+DIFFBOT_REL_OWNERSHIP = (
+    "SUBSIDIARY", "PARENT_ORGANIZATION", "PARENT", "OWNED_BY",
+    "ACQUIRED_BY", "ACQUIRER_OF", "AFFILIATE_OF",
+)
+DIFFBOT_REL_CONTROL = (
+    "CEO", "FOUNDED_BY", "FOUNDER", "BOARD_MEMBER", "BOARD_OF_DIRECTORS",
+    "EXECUTIVE", "CHAIRMAN", "PRESIDENT", "DIRECTOR", "MANAGING_DIRECTOR",
+    "CHIEF_EXECUTIVE", "EMPLOYEE_OF", "MEMBER_OF",
+)
+
+
+def _classify_diffbot_node(node) -> str | None:
+    """Return 'org' for Diffbot org-like nodes, 'person' for person-like nodes,
+    or None for non-ontology types (Location, Skill, Country, etc.) which
+    we deliberately skip to avoid polluting the ontology."""
+    t = (getattr(node, "type", "") or "").strip()
+    if t in DIFFBOT_ORG_LABELS:
+        return "org"
+    if t in DIFFBOT_PERSON_LABELS:
+        return "person"
+    return None
+
+
+def _classify_diffbot_rel(rel_type: str) -> tuple[str, str] | None:
+    """Map a Diffbot relationship type onto our ontology.
+    Returns (canonical_rel_type, role_or_kind) or None to drop the rel."""
+    if rel_type in DIFFBOT_REL_OWNERSHIP:
+        return ("DIRECTLY_OWNED_BY", rel_type)
+    if rel_type in DIFFBOT_REL_CONTROL:
+        return ("CONTROLLED_BY", rel_type.lower())
+    return None  # drop everything else (MENTIONS, INDUSTRY, LOCATION, etc.)
+
+
+def _load_diffbot_aligned(graph_documents, primary_name: str | None = None) -> dict:
+    """Custom Diffbot loader that writes DIRECTLY into the KYC ontology.
+
+    Unlike Neo4jGraph.add_graph_documents(), this DOES NOT create any
+    :Organization / :Person / :Location / :Skill / :Document nodes or
+    Diffbot-style rel types. Instead:
+
+      * Org-like nodes  → fuzzy-merged into existing :LegalEntity by name
+                          (or created as :LegalEntity if no match).
+      * Person nodes    → fuzzy-merged into existing :NaturalPerson by name
+                          (or created as :NaturalPerson if no match).
+      * Location/Skill/Country/etc → SKIPPED (not in ontology).
+      * Ownership rels  → :DIRECTLY_OWNED_BY between LegalEntities.
+      * Control rels    → :CONTROLLED_BY (LegalEntity)-->(NaturalPerson).
+      * Other rels      → DROPPED.
+
+    Returns stats dict.
+    """
+    stats = {
+        "orgs_aligned": 0,                  # # of org nodes processed
+        "orgs_merged_into_existing": 0,     # # merged into existing entities
+        "orgs_created_new": 0,              # # new :LegalEntity created
+        "persons_aligned": 0,
+        "persons_merged_into_existing": 0,
+        "persons_created_new": 0,
+        "ownership_rels_remapped": 0,
+        "control_rels_remapped": 0,
+        "skipped_nodes": 0,                 # non-ontology Diffbot types
+        "skipped_rels": 0,                  # non-ontology rel types
+    }
+
+    # node.id (Diffbot) → elementId of the resulting KYC ontology node.
+    # If a Diffbot node was skipped (Location etc), it is absent from this map
+    # and any rel touching it is dropped.
+    diffbot_to_kyc: dict[str, str] = {}
+
+    with Neo4jClient() as neo:
+        for gd in graph_documents:
+            # ── 1. Process nodes — for each org/person, try to merge into
+            #       existing ontology entity, else create new.
+            for node in gd.nodes:
+                kind = _classify_diffbot_node(node)
+                if kind is None:
+                    stats["skipped_nodes"] += 1
+                    continue
+
+                # Diffbot node id is sometimes a Wikidata URL, sometimes a name.
+                raw_id = (node.id or "").strip()
+                # Best display name from Diffbot properties.
+                props = dict(getattr(node, "properties", {}) or {})
+                name = (props.get("name") or props.get("label")
+                        or (raw_id if not raw_id.startswith("http") else "")).strip()
+                if not name:
+                    # Fall back to id when no name was given.
+                    name = raw_id
+                if not name:
+                    stats["skipped_nodes"] += 1
+                    continue
+
+                stats[f"{kind}s_aligned"] += 1
+
+                if kind == "org":
+                    res = neo.query_one("""
+                        // Fuzzy-find an existing non-DIFFBOT LegalEntity by name.
+                        OPTIONAL MATCH (existing:LegalEntity)
+                        WHERE existing.name IS NOT NULL
+                          AND coalesce(existing.dataSource,'') <> 'DIFFBOT'
+                          AND size(trim(existing.name)) >= 5
+                          AND size(trim($name)) >= 5
+                          AND (toLower(trim(existing.name)) = toLower(trim($name))
+                               OR toLower(trim(existing.name)) STARTS WITH toLower(trim($name))
+                               OR toLower(trim(existing.name)) CONTAINS toLower(trim($name)))
+                        WITH existing
+                        ORDER BY
+                          CASE WHEN toLower(trim(existing.name)) = toLower(trim($name)) THEN 0
+                               WHEN toLower(trim(existing.name)) STARTS WITH toLower(trim($name)) THEN 1
+                               ELSE 2 END,
+                          size(existing.name) ASC
+                        LIMIT 1
+                        WITH existing
+                        CALL {
+                            WITH existing
+                            WITH existing WHERE existing IS NOT NULL
+                            // Tag the existing entity with provenance.
+                            SET existing.enrichedFrom = coalesce(existing.enrichedFrom,'') + ';DIFFBOT'
+                            RETURN elementId(existing) AS eid, false AS created
+                          UNION
+                            WITH existing
+                            WITH existing WHERE existing IS NULL
+                            // No match — create a new :LegalEntity (no extra labels).
+                            CREATE (n:LegalEntity {
+                                id: $newId,
+                                name: $name,
+                                dataSource: 'DIFFBOT',
+                                needsVerification: true,
+                                kycRiskScore: 30,
+                                riskTier: 'medium',
+                                isActive: true,
+                                diffbotId: $rawId
+                            })
+                            RETURN elementId(n) AS eid, true AS created
+                        }
+                        RETURN eid, created
+                    """, {
+                        "name": name,
+                        "rawId": raw_id,
+                        "newId": f"DIFFBOT_{abs(hash(raw_id or name)) % 10**12}",
+                    })
+                    if res:
+                        diffbot_to_kyc[raw_id] = res["eid"]
+                        if res["created"]:
+                            stats["orgs_created_new"] += 1
+                        else:
+                            stats["orgs_merged_into_existing"] += 1
+
+                else:  # kind == "person"
+                    res = neo.query_one("""
+                        OPTIONAL MATCH (existing:NaturalPerson)
+                        WHERE existing.name IS NOT NULL
+                          AND coalesce(existing.dataSource,'') <> 'DIFFBOT'
+                          AND size(trim(existing.name)) >= 5
+                          AND size(trim($name)) >= 5
+                          AND (toLower(trim(existing.name)) = toLower(trim($name))
+                               OR toLower(trim(existing.name)) CONTAINS toLower(trim($name))
+                               OR toLower(trim($name)) CONTAINS toLower(trim(existing.name)))
+                        WITH existing
+                        ORDER BY
+                          CASE WHEN toLower(trim(existing.name)) = toLower(trim($name)) THEN 0 ELSE 1 END,
+                          size(existing.name) ASC
+                        LIMIT 1
+                        WITH existing
+                        CALL {
+                            WITH existing
+                            WITH existing WHERE existing IS NOT NULL
+                            SET existing.enrichedFrom = coalesce(existing.enrichedFrom,'') + ';DIFFBOT'
+                            RETURN elementId(existing) AS eid, false AS created
+                          UNION
+                            WITH existing
+                            WITH existing WHERE existing IS NULL
+                            CREATE (p:NaturalPerson {
+                                id: $newId,
+                                name: $name,
+                                dataSource: 'DIFFBOT',
+                                needsVerification: true,
+                                diffbotId: $rawId
+                            })
+                            RETURN elementId(p) AS eid, true AS created
+                        }
+                        RETURN eid, created
+                    """, {
+                        "name": name,
+                        "rawId": raw_id,
+                        "newId": f"DIFFBOT_P_{abs(hash(raw_id or name)) % 10**12}",
+                    })
+                    if res:
+                        diffbot_to_kyc[raw_id] = res["eid"]
+                        if res["created"]:
+                            stats["persons_created_new"] += 1
+                        else:
+                            stats["persons_merged_into_existing"] += 1
+
+            # ── 2. Process relationships — only ownership/control mapped, others dropped.
+            for rel in gd.relationships:
+                src_id = (getattr(rel.source, "id", "") or "").strip()
+                tgt_id = (getattr(rel.target, "id", "") or "").strip()
+                rt = (getattr(rel, "type", "") or "").strip()
+                if src_id not in diffbot_to_kyc or tgt_id not in diffbot_to_kyc:
+                    stats["skipped_rels"] += 1
+                    continue
+                mapped = _classify_diffbot_rel(rt)
+                if mapped is None:
+                    stats["skipped_rels"] += 1
+                    continue
+                canonical, role = mapped
+                src_eid = diffbot_to_kyc[src_id]
+                tgt_eid = diffbot_to_kyc[tgt_id]
+
+                if canonical == "DIRECTLY_OWNED_BY":
+                    # (a)-[OWNED_BY]->(b)  means a is owned by b.  We always
+                    # write (owned)-[:DIRECTLY_OWNED_BY]->(owner).
+                    # Diffbot direction varies — for SUBSIDIARY/PARENT/PARENT_ORGANIZATION
+                    # the source is the child and target is the parent.
+                    if rt in ("SUBSIDIARY",):
+                        # (parent)-[SUBSIDIARY]->(child)  → flip
+                        owner_eid, owned_eid = src_eid, tgt_eid
+                    else:
+                        owner_eid, owned_eid = tgt_eid, src_eid
+                    res = neo.query_one("""
+                        MATCH (owned), (owner)
+                        WHERE elementId(owned) = $owned AND elementId(owner) = $owner
+                          AND owned:LegalEntity AND owner:LegalEntity
+                        MERGE (owned)-[r:DIRECTLY_OWNED_BY]->(owner)
+                          ON CREATE SET r.source = 'DIFFBOT', r.originalType = $orig
+                        RETURN count(r) AS c
+                    """, {"owned": owned_eid, "owner": owner_eid, "orig": role})
+                    if res and res["c"]:
+                        stats["ownership_rels_remapped"] += 1
+
+                else:  # CONTROLLED_BY
+                    # We need (LegalEntity)-[:CONTROLLED_BY]->(NaturalPerson).
+                    # Determine direction by inspecting node labels.
+                    res = neo.query_one("""
+                        MATCH (a), (b)
+                        WHERE elementId(a) = $aid AND elementId(b) = $bid
+                        WITH a, b,
+                             CASE WHEN a:LegalEntity AND b:NaturalPerson THEN 'ab'
+                                  WHEN b:LegalEntity AND a:NaturalPerson THEN 'ba'
+                                  ELSE NULL END AS dir
+                        WHERE dir IS NOT NULL
+                        WITH (CASE dir WHEN 'ab' THEN a ELSE b END) AS entity,
+                             (CASE dir WHEN 'ab' THEN b ELSE a END) AS person
+                        MERGE (entity)-[r:CONTROLLED_BY]->(person)
+                          ON CREATE SET r.source = 'DIFFBOT', r.role = $role
+                        RETURN count(r) AS c
+                    """, {"aid": src_eid, "bid": tgt_eid, "role": role})
+                    if res and res["c"]:
+                        stats["control_rels_remapped"] += 1
+
+        # ── 3. Optional: tag the primary searched entity with a provenance note.
+        if primary_name:
+            neo.execute("""
+                MATCH (e:LegalEntity)
+                WHERE toLower(trim(e.name)) STARTS WITH toLower(trim($n))
+                WITH e ORDER BY size(e.name) ASC LIMIT 1
+                SET e.enrichedFrom = coalesce(e.enrichedFrom,'') + ';DIFFBOT_WIKIPEDIA'
+            """, {"n": primary_name})
+
+    return stats
+
+
+def _align_diffbot_to_ontology(primary_name: str | None = None) -> dict:
+    """LEGACY post-process cleanup — kept for safety.  The new
+    `_load_diffbot_aligned()` writes ontology-correct nodes upfront, so this
+    function should normally find nothing to do.  It still cleans up any
+    stray Diffbot-style nodes/rels left over from earlier runs.
+    """
+    stats = {
+        "orgs_aligned": 0, "orgs_merged_into_existing": 0,
+        "persons_aligned": 0, "persons_merged_into_existing": 0,
+        "ownership_rels_remapped": 0, "control_rels_remapped": 0,
+    }
+    with Neo4jClient() as neo:
+        # Gather live schema info.
+        live = neo.query_one("""
+            CALL db.labels() YIELD label
+            WITH collect(label) AS labels
+            RETURN labels AS labels
+        """) or {"labels": []}
+        live_labels = set(live["labels"])
+        org_labels   = [l for l in DIFFBOT_ORG_LABELS    if l in live_labels]
+        person_labels= [l for l in DIFFBOT_PERSON_LABELS if l in live_labels]
+        live_rels = {r["relationshipType"] for r in neo.query("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType")}
+        own_rels   = [r for r in DIFFBOT_REL_OWNERSHIP if r in live_rels]
+        ctrl_rels  = [r for r in DIFFBOT_REL_CONTROL   if r in live_rels]
+
+        # Check for existing DIFFBOT-tagged nodes (may already be :LegalEntity
+        # from a prior alignment run — still need merge step).
+        diffbot_org_count = (neo.query_one(
+            "MATCH (n:LegalEntity {dataSource: 'DIFFBOT'}) RETURN count(n) AS c"
+        ) or {"c": 0})["c"]
+        diffbot_person_count = (neo.query_one(
+            "MATCH (n:NaturalPerson {dataSource: 'DIFFBOT'}) RETURN count(n) AS c"
+        ) or {"c": 0})["c"]
+
+        # Fast path: nothing to do if no Diffbot labels, rels, or tagged nodes.
+        if not (org_labels or person_labels or own_rels or ctrl_rels
+                or diffbot_org_count or diffbot_person_count):
+            return stats
+
+        # 1. Promote Diffbot org-like nodes to :LegalEntity (with provenance flags).
+        for lbl in org_labels:
+            r = neo.query_one(f"""
+                MATCH (n:`{lbl}`)
+                WHERE NOT n:LegalEntity AND coalesce(n.name, n.id) IS NOT NULL
+                WITH n, coalesce(n.name, n.id) AS nm
+                SET n:LegalEntity,
+                    n.name              = coalesce(n.name, nm),
+                    n.dataSource        = coalesce(n.dataSource, 'DIFFBOT'),
+                    n.needsVerification = coalesce(n.needsVerification, true),
+                    n.id                = coalesce(n.id, 'DIFFBOT_' + apoc.text.slug(toLower(nm)) + '_' + toString(id(n))),
+                    n.kycRiskScore      = coalesce(n.kycRiskScore, 30),
+                    n.riskTier          = coalesce(n.riskTier, 'medium'),
+                    n.isActive          = coalesce(n.isActive, true)
+                RETURN count(n) AS c
+            """) or {"c": 0}
+            stats["orgs_aligned"] += r["c"]
+
+        # 2. Merge Diffbot orgs into existing GLEIF/PSC/ICIJ entities by name.
+        #    Uses fuzzy CONTAINS match (minimum 5-char name) to handle cases like
+        #    "Deutsche Bank" vs "Deutsche Bank Aktiengesellschaft".
+        #    Picks the best candidate: prefer exact match, then STARTS WITH, then
+        #    shortest CONTAINS match (avoids single-letter false positives).
+        if stats["orgs_aligned"] > 0 or diffbot_org_count > 0:
+            merged = neo.query_one("""
+                MATCH (new:LegalEntity {dataSource: 'DIFFBOT'})
+                WHERE new.name IS NOT NULL AND size(trim(new.name)) >= 5
+                OPTIONAL MATCH (exact:LegalEntity)
+                WHERE exact.dataSource <> 'DIFFBOT'
+                  AND exact.name IS NOT NULL
+                  AND toLower(trim(exact.name)) = toLower(trim(new.name))
+                  AND elementId(exact) <> elementId(new)
+                WITH new, head(collect(exact)) AS exactMatch
+                WITH new, exactMatch WHERE exactMatch IS NULL
+                OPTIONAL MATCH (fuzzy:LegalEntity)
+                WHERE fuzzy.dataSource <> 'DIFFBOT'
+                  AND fuzzy.name IS NOT NULL
+                  AND size(trim(fuzzy.name)) >= 5
+                  AND (toLower(trim(fuzzy.name)) STARTS WITH toLower(trim(new.name))
+                       OR toLower(trim(fuzzy.name)) CONTAINS toLower(trim(new.name)))
+                  AND elementId(fuzzy) <> elementId(new)
+                WITH new, fuzzy ORDER BY
+                    CASE WHEN toLower(trim(fuzzy.name)) STARTS WITH toLower(trim(new.name)) THEN 0 ELSE 1 END,
+                    size(fuzzy.name) ASC
+                WITH new, head(collect(fuzzy)) AS best
+                WITH new, best WHERE best IS NOT NULL
+                CALL apoc.refactor.mergeNodes(
+                    [best, new],
+                    {properties: 'discard', mergeRels: true}
+                ) YIELD node
+                RETURN count(node) AS c
+            """) or {"c": 0}
+            # Also handle exact matches (separate pass for clarity)
+            merged_exact = neo.query_one("""
+                MATCH (new:LegalEntity {dataSource: 'DIFFBOT'})
+                WHERE new.name IS NOT NULL
+                MATCH (existing:LegalEntity)
+                WHERE existing.dataSource <> 'DIFFBOT'
+                  AND existing.name IS NOT NULL
+                  AND toLower(trim(existing.name)) = toLower(trim(new.name))
+                  AND elementId(new) <> elementId(existing)
+                WITH existing, collect(DISTINCT new) AS dups
+                CALL apoc.refactor.mergeNodes(
+                    [existing] + dups,
+                    {properties: 'discard', mergeRels: true}
+                ) YIELD node
+                RETURN count(node) AS c
+            """) or {"c": 0}
+            stats["orgs_merged_into_existing"] = merged["c"] + merged_exact["c"]
+
+        # 3. Promote Diffbot Person nodes to :NaturalPerson.
+        for lbl in person_labels:
+            r = neo.query_one(f"""
+                MATCH (p:`{lbl}`)
+                WHERE NOT p:NaturalPerson AND coalesce(p.name, p.id) IS NOT NULL
+                WITH p, coalesce(p.name, p.id) AS nm
+                SET p:NaturalPerson,
+                    p.name              = coalesce(p.name, nm),
+                    p.dataSource        = coalesce(p.dataSource, 'DIFFBOT'),
+                    p.needsVerification = coalesce(p.needsVerification, true),
+                    p.id                = coalesce(p.id, 'DIFFBOT_P_' + apoc.text.slug(toLower(nm)) + '_' + toString(id(p)))
+                RETURN count(p) AS c
+            """) or {"c": 0}
+            stats["persons_aligned"] += r["c"]
+
+        if stats["persons_aligned"] > 0 or diffbot_person_count > 0:
+            # Exact match first
+            merged_p = neo.query_one("""
+                MATCH (new:NaturalPerson {dataSource: 'DIFFBOT'})
+                WHERE new.name IS NOT NULL
+                MATCH (existing:NaturalPerson)
+                WHERE existing.dataSource <> 'DIFFBOT'
+                  AND existing.name IS NOT NULL
+                  AND toLower(trim(existing.name)) = toLower(trim(new.name))
+                  AND elementId(new) <> elementId(existing)
+                WITH existing, collect(DISTINCT new) AS dups
+                CALL apoc.refactor.mergeNodes(
+                    [existing] + dups,
+                    {properties: 'discard', mergeRels: true}
+                ) YIELD node
+                RETURN count(node) AS c
+            """) or {"c": 0}
+            # Fuzzy CONTAINS fallback for persons (>=5 char names)
+            merged_p_fuzzy = neo.query_one("""
+                MATCH (new:NaturalPerson {dataSource: 'DIFFBOT'})
+                WHERE new.name IS NOT NULL AND size(trim(new.name)) >= 5
+                OPTIONAL MATCH (fuzzy:NaturalPerson)
+                WHERE fuzzy.dataSource <> 'DIFFBOT'
+                  AND fuzzy.name IS NOT NULL
+                  AND size(trim(fuzzy.name)) >= 5
+                  AND (toLower(trim(fuzzy.name)) = toLower(trim(new.name))
+                       OR toLower(trim(fuzzy.name)) CONTAINS toLower(trim(new.name))
+                       OR toLower(trim(new.name)) CONTAINS toLower(trim(fuzzy.name)))
+                  AND elementId(fuzzy) <> elementId(new)
+                WITH new, fuzzy ORDER BY size(fuzzy.name) ASC
+                WITH new, head(collect(fuzzy)) AS best
+                WITH new, best WHERE best IS NOT NULL
+                CALL apoc.refactor.mergeNodes(
+                    [best, new],
+                    {properties: 'discard', mergeRels: true}
+                ) YIELD node
+                RETURN count(node) AS c
+            """) or {"c": 0}
+            stats["persons_merged_into_existing"] = merged_p["c"] + merged_p_fuzzy["c"]
+
+        # 4. Remap ownership-style Diffbot relationships to :DIRECTLY_OWNED_BY.
+        for rt in own_rels:
+            r = neo.query_one(f"""
+                MATCH (a:LegalEntity)-[r:`{rt}`]->(b:LegalEntity)
+                MERGE (a)-[nw:DIRECTLY_OWNED_BY]->(b)
+                  ON CREATE SET nw.source = 'DIFFBOT', nw.originalType = '{rt}'
+                DELETE r
+                RETURN count(nw) AS c
+            """) or {"c": 0}
+            stats["ownership_rels_remapped"] += r["c"]
+
+        # 5. Remap control/officer relationships to :CONTROLLED_BY.
+        for rt in ctrl_rels:
+            r1 = neo.query_one(f"""
+                MATCH (e:LegalEntity)-[r:`{rt}`]->(p:NaturalPerson)
+                MERGE (e)-[nw:CONTROLLED_BY]->(p)
+                  ON CREATE SET nw.source = 'DIFFBOT', nw.role = '{rt.lower()}'
+                DELETE r
+                RETURN count(nw) AS c
+            """) or {"c": 0}
+            r2 = neo.query_one(f"""
+                MATCH (p:NaturalPerson)-[r:`{rt}`]->(e:LegalEntity)
+                MERGE (e)-[nw:CONTROLLED_BY]->(p)
+                  ON CREATE SET nw.source = 'DIFFBOT', nw.role = '{rt.lower()}'
+                DELETE r
+                RETURN count(nw) AS c
+            """) or {"c": 0}
+            stats["control_rels_remapped"] += r1["c"] + r2["c"]
+
+        # 6. If the user named a primary entity, force-link the :Document
+        #    source to that LegalEntity so provenance is queryable.
+        if primary_name:
+            neo.execute("""
+                MATCH (e:LegalEntity)
+                WHERE toLower(trim(e.name)) STARTS WITH toLower(trim($n))
+                WITH e ORDER BY size(e.name) ASC LIMIT 1
+                MATCH (d:Document) WHERE NOT (e)-[:SOURCED_FROM]->(d)
+                WITH e, d ORDER BY d.id DESC LIMIT 5
+                MERGE (e)-[:SOURCED_FROM]->(d)
+            """, {"n": primary_name})
+
+        # 7. Delete orphan non-ontology nodes (Location, Skill, Document,
+        #    Country, City, etc.) that Diffbot creates but are not in our schema.
+        ORPHAN_LABELS = ("Location", "Skill", "Country", "City",
+                         "Award", "Degree", "Language")
+        orphan_labels_present = [l for l in ORPHAN_LABELS if l in live_labels]
+        for lbl in orphan_labels_present:
+            neo.execute(f"MATCH (x:`{lbl}`) WHERE NOT x:LegalEntity AND NOT x:NaturalPerson DETACH DELETE x")
+
+        # 8. (Intentionally skipped) Do NOT strip Diffbot org/person labels
+        #    from aligned nodes — they are needed by graph.add_graph_documents()
+        #    MERGE logic on re-enrichment.  The secondary labels are harmless.
+
+        # 9. Delete orphan Diffbot relationship types not in FIBO vocabulary.
+        ORPHAN_RELS = ("INDUSTRY", "STOCK_EXCHANGE",
+                       "ORGANIZATION_LOCATIONS", "FAMILY_MEMBER",
+                       "SOCIAL_RELATIONSHIP", "DOMAIN")
+        orphan_rels_present = [r for r in ORPHAN_RELS if r in live_rels]
+        for rt in orphan_rels_present:
+            neo.execute(f"MATCH ()-[r:`{rt}`]->() DELETE r")
+
+    return stats
+
+
+def _format_alignment(stats: dict) -> str:
+    lines = ["\n  Ontology alignment:"]
+    if "orgs_created_new" in stats:
+        # New direct-loader stats.
+        lines += [
+            f"    • {stats['orgs_aligned']:,} orgs processed → "
+            f"{stats['orgs_merged_into_existing']:,} merged into existing :LegalEntity, "
+            f"{stats['orgs_created_new']:,} new",
+            f"    • {stats['persons_aligned']:,} persons processed → "
+            f"{stats['persons_merged_into_existing']:,} merged into existing :NaturalPerson, "
+            f"{stats['persons_created_new']:,} new",
+            f"    • {stats['ownership_rels_remapped']:,} → :DIRECTLY_OWNED_BY",
+            f"    • {stats['control_rels_remapped']:,} → :CONTROLLED_BY",
+            f"    • {stats.get('skipped_nodes', 0):,} non-ontology nodes skipped (Location/Skill/etc)",
+            f"    • {stats.get('skipped_rels', 0):,} non-ontology rels skipped",
+        ]
+    else:
+        lines += [
+            f"    • {stats['orgs_aligned']:,} Diffbot orgs labelled :LegalEntity",
+            f"    • {stats['orgs_merged_into_existing']:,} merged into existing GLEIF/PSC/ICIJ entities",
+            f"    • {stats['persons_aligned']:,} persons labelled :NaturalPerson",
+            f"    • {stats['persons_merged_into_existing']:,} merged into existing persons",
+            f"    • {stats['ownership_rels_remapped']:,} ownership rels → :DIRECTLY_OWNED_BY",
+            f"    • {stats['control_rels_remapped']:,} control rels → :CONTROLLED_BY",
+        ]
+    return "\n".join(lines)
+
+
+def _get_diffbot():
+    """Lazy-init Diffbot NLP transformer."""
+    global _diffbot_transformer
+    if _diffbot_transformer is None:
+        api_key = os.getenv("DIFFBOT_API_KEY", "").strip()
+        if api_key:
+            from langchain_experimental.graph_transformers.diffbot import DiffbotGraphTransformer
+            _diffbot_transformer = DiffbotGraphTransformer(diffbot_api_key=api_key)
+    return _diffbot_transformer
+
 
 # ─── LLM Selection ───────────────────────────────────────────────────────────
 def _get_llm():
-    """Auto-select LLM: Anthropic → OpenAI → DeepSeek → Ollama."""
+    """Auto-select LLM: Anthropic → OpenAI → DeepSeek → Ollama.
+    Optimized for fast response with tool calling support."""
     if os.getenv("ANTHROPIC_API_KEY"):
         from langchain_anthropic import ChatAnthropic
         model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
-        return ChatAnthropic(model=model, temperature=0)
+        return ChatAnthropic(model=model, temperature=0, max_tokens=2048)
 
     if os.getenv("OPENAI_API_KEY"):
         from langchain_openai import ChatOpenAI
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        return ChatOpenAI(model=model, temperature=0)
+        return ChatOpenAI(model=model, temperature=0, max_tokens=2048)
 
     if os.getenv("DEEPSEEK_API_KEY"):
         from langchain_openai import ChatOpenAI
         model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         return ChatOpenAI(
-            model=model, temperature=0,
+            model=model, temperature=0, max_tokens=2048,
             api_key=os.environ["DEEPSEEK_API_KEY"],
             base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
         )
@@ -71,6 +649,7 @@ def _get_llm():
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         return ChatOpenAI(
             model=model, temperature=0,
+            max_tokens=1024,  # Shorter for speed with local models
             api_key="ollama",
             base_url=base_url,
         )
@@ -83,39 +662,49 @@ def _get_llm():
 
 # ─── Neo4j Schema (for grounding the LLM) ────────────────────────────────────
 NEO4J_SCHEMA = """
-Node Labels and Properties:
-- LegalEntity: id, name, lei, jurisdiction, jurisdictionName, category, incorporatedDate,
-  isActive, hasOperationalAddress, kycRiskScore, riskTier, pageRankScore, betweennessScore,
-  louvainCommunityId, sccComponentId, wccComponentId
-- NaturalPerson: id, name, nationality, dob, isPEP, isSanctioned, pageRankScore,
-  betweennessScore, louvainCommunityId, sccComponentId, wccComponentId
-- PoliticallyExposedPerson (extends NaturalPerson): same properties, isPEP=true
-- SanctionedEntity (extends NaturalPerson): same properties, isSanctioned=true
+Node Labels and Properties (FIBO-aligned, populated from real GLEIF + ontology-guided enrichment):
+- LegalEntity: id (= LEI for GLEIF entities, or EXT_<slug> for LLM-extracted),
+               lei, name, jurisdiction (ISO alpha-2), jurisdictionName,
+               category (CORPORATION|FUND|BRANCH|TRUST|PARTNERSHIP|LIMITED_PARTNERSHIP),
+               legalForm, isActive, hasOperationalAddress,
+               kycRiskScore, riskTier (low|medium|high|critical),
+               city, country, postalCode, hqCity, hqCountry,
+               description, dataSource (GLEIF | LLM_EXTRACTED), needsVerification,
+               sourceArticles, uri (GLEIF URL).
+- NaturalPerson: id, name, nationality (ISO alpha-2), role,
+                 isPEP (bool), isSanctioned (bool), dataSource, sourceArticles.
+- n4sch__Class / n4sch__Property: FIBO ontology structure (loaded via n10s).
+- Resource: n10s convention (every URI-typed node).
 
-Relationships:
-- (LegalEntity)-[:DIRECTLY_OWNED_BY {percentage, since}]->(LegalEntity)
-  Meaning: child entity is directly owned by parent entity with given percentage
-- (LegalEntity)-[:CONTROLLED_BY {role, since}]->(NaturalPerson)
-  Meaning: entity is controlled by a natural person (ultimate controller)
-- (LegalEntity)-[:TRANSACTION {id, date, amount, currency, isSuspicious}]->(LegalEntity)
-  Meaning: financial transaction between entities
+Relationships (controlled vocabulary derived from FIBO + KYC ontology):
+- (LegalEntity)-[:DIRECTLY_OWNED_BY {percentage, since, source}]->(LegalEntity)
+     → A is directly held by B with given equity %.
+- (LegalEntity)-[:CONTROLLED_BY {role, since, source}]->(NaturalPerson)
+     → entity is controlled by an individual (CEO, founder, UBO, trustee, ...).
+- (LegalEntity)-[:HAS_JURISDICTION]->(LegalEntity|Resource)  (where applicable)
+- (LegalEntity)-[:INSTANCE_OF]->(n4sch__Class)
+     → semantic typing link to FIBO class hierarchy.
+- (LegalEntity)-[:OWNS]->(LegalEntity)  (inverse of DIRECTLY_OWNED_BY)
 
 Key domain facts:
-- Entities with sccComponentId != null are in circular ownership rings
-- Entities with hasOperationalAddress=false are potential shell companies
-- Offshore jurisdictions: KY (Cayman), VG (BVI), PA (Panama), SC (Seychelles)
-- Risk tiers: low (0-24), medium (25-49), high (50-74), critical (75-100)
-- UBO discovery: traverse DIRECTLY_OWNED_BY chain then CONTROLLED_BY to find ultimate controllers
-- GDS scores written back: pageRankScore, betweennessScore, louvainCommunityId, wccComponentId, sccComponentId
+- All :LegalEntity nodes carry real LEI codes when dataSource='GLEIF'.
+- Offshore jurisdictions: KY (Cayman), VG (BVI), PA (Panama), SC (Seychelles), BS (Bahamas), BM (Bermuda).
+- Risk tiers: low (0-24), medium (25-49), high (50-74), critical (75-100).
+- UBO discovery: traverse DIRECTLY_OWNED_BY chain then CONTROLLED_BY to find ultimate controllers.
+- Use semantic_search_entities for fuzzy/similar lookup over real-entity descriptions.
+- Use run_custom_cypher for any Cypher query against this schema.
+- Use query_ontology to ask FIBO/SHACL/GLEIF questions via SPARQL.
 """
 
 GRAPHDB_SCHEMA = """
 GraphDB contains RDF/OWL ontologies:
 - FIBO (Financial Industry Business Ontology) classes for legal entities, ownership, control
 - GLEIF entity instances mapped to FIBO classes
-- KYC-KG custom ontology extending FIBO
+- KYC application ontology extending FIBO (named graph http://kg/kyc/ontology)
+- FIBO↔GLEIF mapping (named graph http://kg/mapping/fibo2glei)
 - LCC ISO-3166 country codes
-- Named graphs: http://kg/fibo, http://kg/glei/instances, http://kg/kyc-kg, http://kg/lcc/iso3166, etc.
+- Named graphs: http://kg/fibo, http://kg/glei/instances, http://kg/kyc/ontology,
+  http://kg/mapping/fibo2glei, http://kg/lcc/iso3166
 Use SPARQL SELECT queries only. No INSERT/DELETE/UPDATE.
 """
 
@@ -420,56 +1009,46 @@ def find_path_between_entities(entity_id_1: str, entity_id_2: str) -> str:
 
 @tool
 def get_entity_detail(entity_id: str) -> str:
-    """Get complete details for an entity including all properties, ownership
-    structure, controllers, and transaction summary.
+    """Get complete details for an entity including all properties and relationships.
 
     Args:
-        entity_id: The entity ID.
+        entity_id: The entity ID or name.
     """
+    # Try by id first, then by name
     rows = _neo.query("""
-        MATCH (e:LegalEntity {id: $id})
-        OPTIONAL MATCH (e)-[r:DIRECTLY_OWNED_BY]->(parent:LegalEntity)
-        OPTIONAL MATCH (child:LegalEntity)-[r2:DIRECTLY_OWNED_BY]->(e)
-        OPTIONAL MATCH (e)-[:CONTROLLED_BY]->(ctrl:NaturalPerson)
-        OPTIONAL MATCH (e)-[t:TRANSACTION]-(other:LegalEntity)
-        WITH e,
-             collect(DISTINCT {name: parent.name, id: parent.id, pct: r.percentage}) AS parents,
-             collect(DISTINCT {name: child.name, id: child.id, pct: r2.percentage}) AS children,
-             collect(DISTINCT {name: ctrl.name, id: ctrl.id, pep: ctrl.isPEP, sanctioned: ctrl.isSanctioned}) AS controllers,
-             count(DISTINCT t) AS txnCount,
-             sum(CASE WHEN t.isSuspicious THEN 1 ELSE 0 END) AS suspTxns
-        RETURN e {.*} AS entity, parents, children, controllers, txnCount, suspTxns
+        MATCH (e) WHERE e.id = $id OR toLower(e.name) = toLower($id)
+        OPTIONAL MATCH (e)-[r]->(target)
+        WITH e, collect(DISTINCT {type: type(r), target: target.name, targetLabels: labels(target)}) AS outgoing
+        OPTIONAL MATCH (source)-[r2]->(e)
+        WITH e, outgoing, collect(DISTINCT {type: type(r2), source: source.name, sourceLabels: labels(source)}) AS incoming
+        RETURN e {.*} AS entity, labels(e) AS labels, outgoing, incoming
     """, {"id": entity_id})
     if not rows:
-        return f"Entity {entity_id} not found."
+        return f"Entity '{entity_id}' not found. Try search_entity_by_name first."
     r = rows[0]
     e = r["entity"]
-    parents = [p for p in r["parents"] if p.get("id")]
-    children = [c for c in r["children"] if c.get("id")]
-    ctrls = [c for c in r["controllers"] if c.get("id")]
+    lbls = r["labels"]
 
-    parent_str = ", ".join(f"{p['name']} ({p.get('pct','')}%)" for p in parents) or "None"
-    child_str = ", ".join(f"{c['name']} ({c.get('pct','')}%)" for c in children) or "None"
-    ctrl_str = ", ".join(
-        f"{c['name']}" + (" 🔴" if c.get("sanctioned") else "") + (" 🟣" if c.get("pep") else "")
-        for c in ctrls
-    ) or "None"
+    out = [f"Entity: {e.get('name', entity_id)} [{', '.join(lbls)}]"]
+    # Show all properties
+    for k, v in sorted(e.items()):
+        if k not in ("embedding",) and v is not None:
+            out.append(f"  {k}: {v}")
 
-    out = [
-        f"Entity: {e.get('name')} ({entity_id})",
-        f"  LEI: {e.get('lei', 'N/A')}",
-        f"  Jurisdiction: {e.get('jurisdiction')} ({e.get('jurisdictionName', '')})",
-        f"  Category: {e.get('category')} | Active: {e.get('isActive')}",
-        f"  Operational Address: {e.get('hasOperationalAddress')}",
-        f"  Incorporated: {e.get('incorporatedDate', 'N/A')}",
-        f"  Risk: {e.get('riskTier')} tier, score {e.get('kycRiskScore')}/100",
-        f"  PageRank: {e.get('pageRankScore', 0):.4f} | Betweenness: {e.get('betweennessScore', 0):.2f}",
-        f"  Community: #{e.get('louvainCommunityId')} | SCC: {e.get('sccComponentId', 'None')}",
-        f"  Parents (owned by): {parent_str}",
-        f"  Children (subsidiaries): {child_str}",
-        f"  Controllers: {ctrl_str}",
-        f"  Transactions: {r['txnCount']} total, {r['suspTxns']} suspicious",
-    ]
+    # Outgoing relationships
+    outgoing = [o for o in r["outgoing"] if o.get("target")]
+    if outgoing:
+        out.append("\nOutgoing relationships:")
+        for o in outgoing:
+            out.append(f"  -[{o['type']}]-> {o['target']} [{','.join(o.get('targetLabels',[]))}]")
+
+    # Incoming relationships
+    incoming = [i for i in r["incoming"] if i.get("source")]
+    if incoming:
+        out.append("\nIncoming relationships:")
+        for i in incoming:
+            out.append(f"  <-[{i['type']}]- {i['source']} [{','.join(i.get('sourceLabels',[]))}]")
+
     return "\n".join(out)
 
 
@@ -585,31 +1164,33 @@ def get_community_analysis(community_id: int | None = None) -> str:
 
 @tool
 def get_graph_statistics() -> str:
-    """Get overall statistics of the knowledge graph — entity counts, relationship
-    counts, risk distribution, etc."""
-    stats = {}
-    stats["entities"] = _neo.query("MATCH (e:LegalEntity) RETURN count(e) AS c")[0]["c"]
-    stats["persons"] = _neo.query("MATCH (p:NaturalPerson) RETURN count(p) AS c")[0]["c"]
-    stats["peps"] = _neo.query("MATCH (p:NaturalPerson {isPEP: true}) RETURN count(p) AS c")[0]["c"]
-    stats["sanctioned"] = _neo.query("MATCH (p:NaturalPerson {isSanctioned: true}) RETURN count(p) AS c")[0]["c"]
-    stats["ownership_rels"] = _neo.query("MATCH ()-[r:DIRECTLY_OWNED_BY]->() RETURN count(r) AS c")[0]["c"]
-    stats["control_rels"] = _neo.query("MATCH ()-[r:CONTROLLED_BY]->() RETURN count(r) AS c")[0]["c"]
-    stats["transactions"] = _neo.query("MATCH ()-[t:TRANSACTION]->() RETURN count(t) AS c")[0]["c"]
-    stats["suspicious_txns"] = _neo.query("MATCH ()-[t:TRANSACTION {isSuspicious: true}]->() RETURN count(t) AS c")[0]["c"]
-    risk_dist = _neo.query("""
-        MATCH (e:LegalEntity)
-        RETURN e.riskTier AS tier, count(e) AS cnt
-        ORDER BY cnt DESC
+    """Get overall statistics of the knowledge graph — node counts, relationship
+    counts, and label distribution."""
+    label_counts = _neo.query("""
+        CALL db.labels() YIELD label
+        CALL apoc.cypher.run('MATCH (n:`' + label + '`) RETURN count(n) AS c', {}) YIELD value
+        RETURN label, value.c AS count ORDER BY value.c DESC
     """)
-    risk_str = ", ".join(f"{r['tier']}: {r['cnt']}" for r in risk_dist)
+    if not label_counts:
+        # Fallback without APOC
+        label_counts = _neo.query("""
+            MATCH (n) WITH labels(n) AS lbls UNWIND lbls AS label
+            RETURN label, count(*) AS count ORDER BY count DESC
+        """)
+    rel_counts = _neo.query("""
+        MATCH ()-[r]->() RETURN type(r) AS rel_type, count(r) AS count
+        ORDER BY count DESC LIMIT 15
+    """)
+    total_nodes = _neo.query("MATCH (n) RETURN count(n) AS c")[0]["c"]
+    total_rels = _neo.query("MATCH ()-[r]->() RETURN count(r) AS c")[0]["c"]
+    labels_str = "\n".join(f"  {r['label']}: {r['count']}" for r in label_counts)
+    rels_str = "\n".join(f"  {r['rel_type']}: {r['count']}" for r in rel_counts)
     return (
         f"Knowledge Graph Statistics:\n"
-        f"  Legal Entities: {stats['entities']}\n"
-        f"  Natural Persons: {stats['persons']} (PEPs: {stats['peps']}, Sanctioned: {stats['sanctioned']})\n"
-        f"  Ownership relationships: {stats['ownership_rels']}\n"
-        f"  Control relationships: {stats['control_rels']}\n"
-        f"  Transactions: {stats['transactions']} ({stats['suspicious_txns']} suspicious)\n"
-        f"  Risk Distribution: {risk_str}"
+        f"  Total Nodes: {total_nodes}\n"
+        f"  Total Relationships: {total_rels}\n\n"
+        f"Node Labels:\n{labels_str}\n\n"
+        f"Relationship Types:\n{rels_str}"
     )
 
 
@@ -843,7 +1424,7 @@ def find_hidden_controllers() -> str:
 
 @tool
 def search_entity_by_name(name: str) -> str:
-    """Search for entities or persons by name (case-insensitive partial match).
+    """Search for legal entities or natural persons by name (case-insensitive partial match).
     Use this when the user mentions an entity by name instead of ID.
 
     Args:
@@ -854,19 +1435,196 @@ def search_entity_by_name(name: str) -> str:
         WHERE (n:LegalEntity OR n:NaturalPerson)
           AND toLower(n.name) CONTAINS toLower($name)
         RETURN labels(n) AS labels, n.id AS id, n.name AS name,
-               n.jurisdiction AS jurisdiction, n.nationality AS nationality,
-               n.kycRiskScore AS score
+               n.lei AS lei, n.jurisdiction AS jurisdiction,
+               n.nationality AS nationality, n.kycRiskScore AS riskScore,
+               n.dataSource AS dataSource
         ORDER BY n.name LIMIT 10
     """, {"name": name})
     if not rows:
-        return f"No entities or persons found matching '{name}'."
+        return f"No legal entities or natural persons found matching '{name}'."
     out = [f"Search results for '{name}' ({len(rows)} found):\n"]
     for r in rows:
-        label = "Entity" if "LegalEntity" in r["labels"] else "Person"
-        loc = r.get("jurisdiction") or r.get("nationality") or ""
-        score_str = f", score {r['score']}" if r.get("score") else ""
-        out.append(f"  [{label}] {r['id']} — {r['name']} ({loc}{score_str})")
+        lbls = r["labels"]
+        is_le = "LegalEntity" in lbls
+        label = "LegalEntity" if is_le else "NaturalPerson"
+        extras = []
+        if is_le:
+            if r.get("lei"):          extras.append(f"LEI={r['lei']}")
+            if r.get("jurisdiction"): extras.append(f"jur={r['jurisdiction']}")
+            if r.get("riskScore") is not None: extras.append(f"risk={r['riskScore']}")
+        else:
+            if r.get("nationality"):  extras.append(f"nat={r['nationality']}")
+        if r.get("dataSource"):       extras.append(f"src={r['dataSource']}")
+        extra_str = f"  ({', '.join(extras)})" if extras else ""
+        out.append(f"  [{label}] {r['id']} — {r['name']}{extra_str}")
     return "\n".join(out)
+
+
+# ─── Vector Search Tools ─────────────────────────────────────────────────────
+
+@tool
+def semantic_search_entities(query: str, k: int = 5) -> str:
+    """Search entities using semantic similarity (vector embeddings).
+    This finds entities based on meaning, not just exact name match.
+    Useful when you don't know the exact entity name or want related entities.
+
+    Args:
+        query: Natural language description of what to find (e.g. 'banks involved in money laundering').
+        k: Number of results to return (default 5).
+    """
+    vs = _get_vector_store()
+    if vs is None:
+        return "Vector search not available. Use search_entity_by_name for text search."
+
+    try:
+        results = vs.similarity_search_with_score(query, k=min(k, 10))
+        if not results:
+            return f"No semantic matches found for: '{query}'"
+
+        out = [f"Semantic search results for '{query}' ({len(results)} matches):\n"]
+        for doc, score in results:
+            out.append(f"  • [{score:.3f}] {doc.page_content}")
+            if doc.metadata:
+                meta_str = ", ".join(f"{k}={v}" for k, v in doc.metadata.items()
+                                    if k not in ("embedding", "nodeId", "text"))
+                if meta_str:
+                    out.append(f"    Metadata: {meta_str}")
+        return "\n".join(out)
+    except Exception as e:
+        return f"Vector search error: {e}. Try search_entity_by_name instead."
+
+
+@tool
+def extract_entities_from_url(url: str) -> str:
+    """Extract entities and relationships from a web page or article URL
+    using Diffbot NLP and load them into the knowledge graph.
+    Use this to enrich the graph with real-time data from news articles,
+    company pages, or Wikipedia.
+
+    Args:
+        url: The URL to extract entities from (e.g. Wikipedia article URL).
+    """
+    diffbot = _get_diffbot()
+    if diffbot is None:
+        return "Diffbot not configured. Set DIFFBOT_API_KEY in .env to enable web extraction."
+
+    try:
+        from langchain_community.document_loaders import WebBaseLoader
+
+        # Load the page
+        loader = WebBaseLoader([url])
+        docs = loader.load()
+        if not docs:
+            return f"Could not load content from: {url}"
+
+        # Truncate for Diffbot limits
+        doc = docs[0]
+        if len(doc.page_content) > 90000:
+            doc.page_content = doc.page_content[:90000]
+
+        # Extract graph structure
+        graph_documents = diffbot.convert_to_graph_documents([doc])
+        if not graph_documents:
+            return f"No entities/relationships extracted from: {url}"
+
+        n_nodes = sum(len(gd.nodes) for gd in graph_documents)
+        n_rels = sum(len(gd.relationships) for gd in graph_documents)
+
+        # Load DIRECTLY into the KYC ontology (no orphan :Organization /
+        # :Document / :Location nodes created).
+        align = _load_diffbot_aligned(graph_documents)
+
+        return (
+            f"✅ Extracted and loaded from {url}:\n"
+            f"  • {n_nodes} entities (Diffbot)\n"
+            f"  • {n_rels} relationships (Diffbot)\n"
+            f"  Data is now queryable in the knowledge graph."
+            + _format_alignment(align)
+        )
+    except Exception as e:
+        return f"Extraction error: {e}"
+
+
+@tool
+def extract_entities_from_text(text: str) -> str:
+    """Extract entities and relationships from raw text using Diffbot NLP
+    and load them into the knowledge graph. Use for pasting news articles,
+    regulatory filings, or any unstructured text.
+
+    Args:
+        text: Raw text to extract entities from (company descriptions, news, filings).
+    """
+    diffbot = _get_diffbot()
+    if diffbot is None:
+        return "Diffbot not configured. Set DIFFBOT_API_KEY in .env to enable text extraction."
+
+    try:
+        doc = Document(page_content=text[:90000], metadata={"source": "user_input"})
+        graph_documents = diffbot.convert_to_graph_documents([doc])
+        if not graph_documents:
+            return "No entities/relationships extracted from the provided text."
+
+        n_nodes = sum(len(gd.nodes) for gd in graph_documents)
+        n_rels = sum(len(gd.relationships) for gd in graph_documents)
+
+        # Load DIRECTLY into the KYC ontology.
+        align = _load_diffbot_aligned(graph_documents)
+
+        return (
+            f"✅ Extracted and loaded from text:\n"
+            f"  • {n_nodes} entities (Diffbot)\n"
+            f"  • {n_rels} relationships (Diffbot)\n"
+            f"  Data is now queryable in the knowledge graph."
+            + _format_alignment(align)
+        )
+    except Exception as e:
+        return f"Extraction error: {e}"
+
+
+@tool
+def enrich_entity_from_web(entity_name: str) -> str:
+    """Enrich the knowledge graph with real-world information about an entity
+    by searching Wikipedia and extracting structured data via Diffbot.
+
+    Args:
+        entity_name: Name of entity to research (e.g. 'Deutsche Bank', 'BlackRock').
+    """
+    diffbot = _get_diffbot()
+    if diffbot is None:
+        return "Diffbot not configured. Set DIFFBOT_API_KEY in .env to enable enrichment."
+
+    try:
+        from langchain_community.document_loaders import WikipediaLoader
+
+        raw_docs = WikipediaLoader(query=entity_name, load_max_docs=1).load()
+        if not raw_docs:
+            return f"No Wikipedia article found for '{entity_name}'."
+
+        doc = raw_docs[0]
+        if len(doc.page_content) > 90000:
+            doc.page_content = doc.page_content[:90000]
+
+        graph_documents = diffbot.convert_to_graph_documents([doc])
+        if not graph_documents:
+            return f"No structured data extracted for '{entity_name}'."
+
+        n_nodes = sum(len(gd.nodes) for gd in graph_documents)
+        n_rels = sum(len(gd.relationships) for gd in graph_documents)
+
+        # Load DIRECTLY into the KYC ontology — no orphan :Organization /
+        # :Document / :Location nodes are created.
+        align = _load_diffbot_aligned(graph_documents, primary_name=entity_name)
+
+        return (
+            f"✅ Enriched graph with data about '{entity_name}':\n"
+            f"  • Source: Wikipedia\n"
+            f"  • {n_nodes} entities extracted (Diffbot)\n"
+            f"  • {n_rels} relationships extracted (Diffbot)\n"
+            f"  You can now query about {entity_name} and its connections."
+            + _format_alignment(align)
+        )
+    except Exception as e:
+        return f"Enrichment error: {e}"
 
 
 # ─── System Prompt ────────────────────────────────────────────────────────────
@@ -912,6 +1670,10 @@ When the user asks about:
 - "money laundering" or "red flags" → use find_money_laundering_indicators
 - "hidden controller" or "shadow" → use find_hidden_controllers
 - "ontology" or "FIBO" or "SPARQL" → use query_ontology
+- "search" or "find similar" or vague entity reference → use semantic_search_entities
+- "enrich" or "add data about" or "research" → use enrich_entity_from_web
+- "extract from URL" or "load from" → use extract_entities_from_url
+- "extract from text" or user pastes text → use extract_entities_from_text
 - Any other graph question → use run_custom_cypher
 
 Be concise but thorough. Format output with clear structure. Flag any sanctions
@@ -941,6 +1703,12 @@ ALL_TOOLS = [
     search_entity_by_name,
     query_ontology,
     run_custom_cypher,
+    # Vector search
+    semantic_search_entities,
+    # Diffbot integration
+    extract_entities_from_url,
+    extract_entities_from_text,
+    enrich_entity_from_web,
 ]
 
 # Module-level agent singleton (lazy init)

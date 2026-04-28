@@ -44,15 +44,16 @@ services:
       - ./import:/var/lib/neo4j/import
     environment:
       NEO4J_AUTH: neo4j/kycpassword123
-      NEO4J_PLUGINS: '["apoc", "graph-data-science", "n10s"]'
+      NEO4J_PLUGINS: '["apoc", "graph-data-science", "n10s" , "apoc-extended"]'
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*,n10s.*,gds.*"
       NEO4J_dbms_security_procedures_allowlist: "apoc.*,n10s.*,gds.*"
       NEO4J_apoc_import_file_enabled: "true"
       NEO4J_apoc_export_file_enabled: "true"   # 
       NEO4J_apoc_import_file_use__neo4j__config: "true"
-      NEO4J_server_memory_heap_initial__size: "2G"
-      NEO4J_server_memory_heap_max__size: "4G"
-      NEO4J_server_memory_pagecache_size: "1G"
+      NEO4J_server_memory_heap_initial__size: "4G"
+      NEO4J_server_memory_heap_max__size: "8G"
+      NEO4J_server_memory_pagecache_size: "2G"
+      NEO4J_dbms_memory_transaction_total_max: "8G"
     networks: [kyc_net]
     restart: unless-stopped
     healthcheck:

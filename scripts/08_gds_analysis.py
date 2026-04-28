@@ -40,8 +40,12 @@ ALGOS = [
         }}) YIELD nodePropertiesWritten, ranIterations
         RETURN nodePropertiesWritten AS nodes, ranIterations AS iters
     """),
-    ("Betweenness (gatekeepers)", f"""
-        CALL gds.betweenness.write('{DIRECTED}', {{ writeProperty: 'betweennessScore' }})
+    # NOTE: exact Betweenness is O(V*E) — infeasible on the 13M-node real-data
+    # perimeter (Neo4j was OOM-killed). Use sampled approximation instead.
+    ("Betweenness (sampled, gatekeepers)", f"""
+        CALL gds.betweenness.write('{DIRECTED}', {{
+            writeProperty: 'betweennessScore', samplingSize: 1000
+        }})
         YIELD nodePropertiesWritten
         RETURN nodePropertiesWritten AS nodes
     """),
@@ -62,32 +66,47 @@ def drop_if_exists(neo: Neo4jClient, name: str) -> None:
 
 
 def project_graphs(neo: Neo4jClient) -> None:
-    print("→ Projecting in-memory graphs ...")
+    print("→ Projecting in-memory graphs (real-data perimeter: GLEIF + UK_PSC + ICIJ) ...")
     drop_if_exists(neo, UNDIRECTED)
     drop_if_exists(neo, DIRECTED)
 
-    neo.execute(f"""
-        CALL gds.graph.project(
-            '{UNDIRECTED}',
-            ['LegalEntity', 'NaturalPerson'],
-            {{
-              DIRECTLY_OWNED_BY: {{ orientation: 'UNDIRECTED' }},
-              CONTROLLED_BY:     {{ orientation: 'UNDIRECTED' }}
-            }}
-        )
-    """)
+    # Scope to real ownership graph: GLEIF L1/L2 + UK PSC + ICIJ Offshore Leaks.
+    # OpenSanctions screening-list isolates (no graph relationships) are
+    # excluded from analytics so PageRank / Louvain etc. stay meaningful.
+    SCOPE = "n.dataSource IN ['GLEIF','GLEIF_RR','UK_PSC','ICIJ','ICIJ_INTERMEDIARY']"
+    SCOPE_AB = ("(a:LegalEntity AND a.dataSource IN ['GLEIF','GLEIF_RR','UK_PSC','ICIJ','ICIJ_INTERMEDIARY'])"
+                " OR (b:LegalEntity AND b.dataSource IN ['GLEIF','GLEIF_RR','UK_PSC','ICIJ','ICIJ_INTERMEDIARY'])")
+
+    node_query = f"""
+        MATCH (n:LegalEntity)
+        WHERE {SCOPE}
+        RETURN id(n) AS id, labels(n) AS labels
+        UNION
+        MATCH (p:NaturalPerson)<-[:CONTROLLED_BY]-(:LegalEntity)
+        RETURN DISTINCT id(p) AS id, labels(p) AS labels
+    """
+
+    rel_query_undir = f"""
+        MATCH (a)-[r:DIRECTLY_OWNED_BY|CONTROLLED_BY]-(b)
+        WHERE {SCOPE_AB}
+        RETURN id(a) AS source, id(b) AS target, type(r) AS type
+    """
+    rel_query_dir = f"""
+        MATCH (a)-[r:DIRECTLY_OWNED_BY|CONTROLLED_BY]->(b)
+        WHERE {SCOPE_AB}
+        RETURN id(a) AS source, id(b) AS target, type(r) AS type
+    """
+
+    neo.execute(
+        f"CALL gds.graph.project.cypher('{UNDIRECTED}', $nodes, $rels)",
+        {"nodes": node_query, "rels": rel_query_undir},
+    )
     print(f"  ✓ '{UNDIRECTED}' (undirected, for WCC/Louvain)")
 
-    neo.execute(f"""
-        CALL gds.graph.project(
-            '{DIRECTED}',
-            ['LegalEntity', 'NaturalPerson'],
-            {{
-              DIRECTLY_OWNED_BY: {{ orientation: 'NATURAL' }},
-              CONTROLLED_BY:     {{ orientation: 'NATURAL' }}
-            }}
-        )
-    """)
+    neo.execute(
+        f"CALL gds.graph.project.cypher('{DIRECTED}', $nodes, $rels)",
+        {"nodes": node_query, "rels": rel_query_dir},
+    )
     print(f"  ✓ '{DIRECTED}' (natural, for PageRank/SCC)")
 
 
@@ -99,47 +118,62 @@ def run_algos(neo: Neo4jClient) -> None:
 
 
 def compute_risk_score(neo: Neo4jClient) -> None:
-    """Composite KYC risk score: 0 (clean) to 100 (red flag)."""
-    print("\n→ Computing kycRiskScore ...")
+    """Composite KYC risk score: 0 (clean) to 100 (red flag).
+
+    Scoped to GLEIF perimeter only \u2014 OpenSanctions screening-list isolates
+    (which have no relationships in our graph) keep the score they already
+    have (typically null) so analytics aren\u2019t skewed by a 26k-row no-op.
+    """
+    print("\n\u2192 Computing kycRiskScore ...")
+    # Index on sccComponentId for the ring-membership lookup
+    try:
+        neo.execute("CREATE INDEX scc_id IF NOT EXISTS FOR (e:LegalEntity) ON (e.sccComponentId)")
+    except Exception:
+        pass
+
+    # Batch via apoc.periodic.iterate so the per-transaction memory cap doesn't
+    # blow up on the 17M-node real-data perimeter.
     neo.execute("""
-        MATCH (e:LegalEntity)
-        WITH e,
-             // 1. High-risk jurisdiction (35 points)
-             CASE e.riskTier WHEN 'high' THEN 35 WHEN 'medium' THEN 15 ELSE 0 END AS jurisdictionRisk,
-
-             // 2. Sanctioned UBO anywhere up the ownership chain (40 points)
-             EXISTS {
-                 MATCH (e)-[:DIRECTLY_OWNED_BY*1..6]->()-[:CONTROLLED_BY]->(p:NaturalPerson)
-                 WHERE p.isSanctioned = true
-             } AS sanctionedUBO,
-
-             // 3. PEP control (15 points)
-             EXISTS {
-                 MATCH (e)-[:CONTROLLED_BY]->(p:NaturalPerson) WHERE p.isPEP = true
-             } AS pepControl,
-
-             // 4. In a strongly-connected component (= ring) of size > 1 (20 points)
-             COALESCE(e.sccComponentId, -1) AS scc
-
-        OPTIONAL MATCH (other:LegalEntity)
-        WHERE other.sccComponentId = scc AND other <> e
-        WITH e, jurisdictionRisk, sanctionedUBO, pepControl,
-             count(other) > 0 AS inRing
-
-        SET e.kycRiskScore =
-            jurisdictionRisk
-          + (CASE WHEN sanctionedUBO THEN 40 ELSE 0 END)
-          + (CASE WHEN pepControl    THEN 15 ELSE 0 END)
-          + (CASE WHEN inRing        THEN 20 ELSE 0 END)
+        CALL apoc.periodic.iterate(
+          "MATCH (e:LegalEntity)
+           WHERE e.dataSource IN ['GLEIF','GLEIF_RR','UK_PSC','ICIJ','ICIJ_INTERMEDIARY']
+           RETURN e",
+          "WITH e,
+                CASE e.riskTier WHEN 'high' THEN 60 WHEN 'medium' THEN 30 ELSE 0 END AS jurisdictionRisk,
+                EXISTS {
+                    MATCH (e)-[:DIRECTLY_OWNED_BY*1..3]->()-[:CONTROLLED_BY]->(p:NaturalPerson)
+                    WHERE p.isSanctioned = true
+                } AS sanctionedUBO,
+                EXISTS {
+                    MATCH (e)-[:CONTROLLED_BY]->(p:NaturalPerson) WHERE p.isPEP = true
+                } AS pepControl,
+                COALESCE(e.sccComponentId, -1) AS scc,
+                COALESCE(e.pageRankScore, 0.0) AS pr
+           OPTIONAL MATCH (other:LegalEntity)
+           WHERE other.sccComponentId = scc AND other <> e AND scc <> -1
+           WITH e, jurisdictionRisk, sanctionedUBO, pepControl, pr,
+                count(other) > 0 AS inRing
+           SET e.kycRiskScore =
+               apoc.coll.min([100,
+                 jurisdictionRisk
+               + (CASE WHEN sanctionedUBO THEN 30 ELSE 0 END)
+               + (CASE WHEN pepControl    THEN 15 ELSE 0 END)
+               + (CASE WHEN inRing        THEN 20 ELSE 0 END)
+               + (CASE WHEN pr > 1.0      THEN 10 ELSE 0 END)
+               ])",
+          {batchSize: 5000, parallel: false}
+        ) YIELD batches, total, errorMessages
+        RETURN batches, total, errorMessages
     """)
     rows = neo.query("""
         MATCH (e:LegalEntity)
+        WHERE e.dataSource IN ['GLEIF','GLEIF_RR','UK_PSC','ICIJ','ICIJ_INTERMEDIARY']
         RETURN e.kycRiskScore AS score, count(*) AS n
         ORDER BY score DESC
     """)
-    print("  Distribution of risk scores:")
+    print("  Distribution of risk scores (real-data perimeter):")
     for row in rows:
-        print(f"    score={row['score']:>3}  count={row['n']}")
+        print(f"    score={row['score']!s:>5}  count={row['n']}")
 
 
 def show_top_risks(neo: Neo4jClient) -> None:

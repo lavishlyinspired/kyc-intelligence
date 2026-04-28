@@ -191,6 +191,7 @@ button.secondary.active-btn { background: var(--accent-light); color: var(--acce
     <div class="nav-item" data-page="ubo"><span class="icon">🔗</span><span class="nav-label">UBO Chains</span></div>
     <div class="nav-item" data-page="graph"><span class="icon">🕸️</span><span class="nav-label">Graph Explorer</span></div>
     <div class="nav-item" data-page="chat"><span class="icon">💬</span><span class="nav-label">Chat Assistant</span></div>
+    <div class="nav-item" data-page="enrich"><span class="icon">🌐</span><span class="nav-label">Enrich (Diffbot)</span></div>
 
     <div class="nav-section">Analysis</div>
     <div class="nav-item" data-page="risk"><span class="icon">⚠️</span><span class="nav-label">Risk Analysis</span></div>
@@ -308,64 +309,30 @@ button.secondary.active-btn { background: var(--accent-light); color: var(--acce
   <div class="chat-layout">
     <!-- Sidebar with suggested questions -->
     <div class="chat-sidebar">
-      <h4>Entity Investigation</h4>
-      <button class="chat-quick-btn" onclick="chatQ('Who owns ENTITY_0042?')"><span class="qb-icon">🔍</span> Who owns ENTITY_0042?</button>
-      <button class="chat-quick-btn" onclick="chatQ('Risk of ENTITY_0303')"><span class="qb-icon">⚠️</span> Risk profile ENTITY_0303</button>
-      <button class="chat-quick-btn" onclick="chatQ('Sanctions check ENTITY_0042')"><span class="qb-icon">🔴</span> Sanctions check</button>
-      <button class="chat-quick-btn" onclick="chatQ('Detail ENTITY_0042')"><span class="qb-icon">📋</span> Full entity detail</button>
-      <button class="chat-quick-btn" onclick="chatQ('Transactions of ENTITY_0000')"><span class="qb-icon">💰</span> Entity transactions</button>
-      <button class="chat-quick-btn" onclick="chatQ('Subsidiaries of ENTITY_0009')"><span class="qb-icon">🏢</span> Subsidiaries</button>
-      <button class="chat-quick-btn" onclick="chatQ('Compare ENTITY_0001 and ENTITY_0050')"><span class="qb-icon">⚖️</span> Compare entities</button>
-      <button class="chat-quick-btn" onclick="chatQ('Path between ENTITY_0001 and ENTITY_0050')"><span class="qb-icon">🔗</span> Path between</button>
-      <h4>Risk & Analytics</h4>
-      <button class="chat-quick-btn" onclick="chatQ('Top 10 risk entities')"><span class="qb-icon">📊</span> Top risk entities</button>
-      <button class="chat-quick-btn" onclick="chatQ('Circular ownership')"><span class="qb-icon">🔄</span> Circular ownership</button>
-      <button class="chat-quick-btn" onclick="chatQ('Shell companies')"><span class="qb-icon">🏚️</span> Shell companies</button>
-      <button class="chat-quick-btn" onclick="chatQ('Show PEPs')"><span class="qb-icon">🟣</span> PEP list</button>
-      <button class="chat-quick-btn" onclick="chatQ('Sanctioned list')"><span class="qb-icon">🔴</span> Sanctioned list</button>
-      <button class="chat-quick-btn" onclick="chatQ('Suspicious transactions')"><span class="qb-icon">🚨</span> Suspicious txns</button>
-      <button class="chat-quick-btn" onclick="chatQ('Structuring detection')"><span class="qb-icon">💵</span> Structuring</button>
-      <h4>GDS Analytics</h4>
-      <button class="chat-quick-btn" onclick="chatQ('PageRank leaders')"><span class="qb-icon">📈</span> PageRank leaders</button>
-      <button class="chat-quick-btn" onclick="chatQ('Betweenness leaders')"><span class="qb-icon">🌉</span> Key intermediaries</button>
-      <button class="chat-quick-btn" onclick="chatQ('Communities')"><span class="qb-icon">👥</span> Community clusters</button>
-      <button class="chat-quick-btn" onclick="chatQ('GDS summary')"><span class="qb-icon">📊</span> GDS summary</button>
-      <button class="chat-quick-btn" onclick="chatQ('Cross-jurisdiction chains')"><span class="qb-icon">🌍</span> Cross-jurisdiction</button>
-      <h4>Knowledge Graph (SPARQL)</h4>
-      <button class="chat-quick-btn" onclick="chatQ('FIBO classes')"><span class="qb-icon">🧬</span> FIBO classes</button>
-      <button class="chat-quick-btn" onclick="chatQ('Ownership classes')"><span class="qb-icon">📑</span> Ownership classes</button>
-      <button class="chat-quick-btn" onclick="chatQ('Ontology properties')"><span class="qb-icon">🔧</span> Object properties</button>
-      <button class="chat-quick-btn" onclick="chatQ('Named graphs')"><span class="qb-icon">📂</span> Named graphs</button>
-      <button class="chat-quick-btn" onclick="chatQ('GLEIF entities')"><span class="qb-icon">🏦</span> GLEIF entities</button>
-      <button class="chat-quick-btn" onclick="chatQ('Subclass hierarchy')"><span class="qb-icon">🌳</span> Class hierarchy</button>
-      <button class="chat-quick-btn" onclick="chatQ('FIBO GLEIF mapping')"><span class="qb-icon">🗺️</span> FIBO↔GLEIF map</button>
-      <button class="chat-quick-btn" onclick="chatQ('ISO countries')"><span class="qb-icon">🌐</span> ISO countries</button>
-      <h4>Other</h4>
-      <button class="chat-quick-btn" onclick="chatQ('Jurisdiction analysis')"><span class="qb-icon">🗂️</span> Jurisdiction risk</button>
+      <h4>🌐 Diffbot Enrichment</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Enrich the graph with data about Deutsche Bank')"><span class="qb-icon">🏦</span> Enrich: Deutsche Bank</button>
+      <button class="chat-quick-btn" onclick="chatQ('Enrich the graph with data about HSBC money laundering')"><span class="qb-icon">🏦</span> Enrich: HSBC</button>
+      <button class="chat-quick-btn" onclick="chatQ('Enrich the graph with data about Wirecard scandal')"><span class="qb-icon">💥</span> Enrich: Wirecard</button>
+      <button class="chat-quick-btn" onclick="chatQ('Enrich the graph with data about BlackRock')"><span class="qb-icon">🏢</span> Enrich: BlackRock</button>
+      <button class="chat-quick-btn" onclick="chatQ('Enrich the graph with data about Panama Papers')"><span class="qb-icon">📄</span> Enrich: Panama Papers</button>
+      <h4>🔍 Semantic Search</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Search for entities related to money laundering')"><span class="qb-icon">🔎</span> Money laundering</button>
+      <button class="chat-quick-btn" onclick="chatQ('Find entities similar to investment banks')"><span class="qb-icon">🔎</span> Investment banks</button>
+      <button class="chat-quick-btn" onclick="chatQ('Search for financial scandals')"><span class="qb-icon">🔎</span> Financial scandals</button>
+      <h4>Investigation</h4>
+      <button class="chat-quick-btn" onclick="chatQ('What organizations are in the graph?')"><span class="qb-icon">🏢</span> All organizations</button>
+      <button class="chat-quick-btn" onclick="chatQ('Who are the key persons in the graph?')"><span class="qb-icon">👤</span> Key persons</button>
+      <button class="chat-quick-btn" onclick="chatQ('What relationships exist between Deutsche Bank and other entities?')"><span class="qb-icon">🔗</span> Deutsche Bank links</button>
       <button class="chat-quick-btn" onclick="chatQ('Graph statistics')"><span class="qb-icon">📊</span> Graph statistics</button>
-      <button class="chat-quick-btn" onclick="chatQ('Orphan nodes')"><span class="qb-icon">🏝️</span> Orphan nodes</button>
-      <h4>🔴 Advanced Investigations</h4>
-      <button class="chat-quick-btn" onclick="chatQ('Which entities are ultimately controlled by sanctioned individuals?')"><span class="qb-icon">🔴</span> Sanctions exposure</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which high-risk entities are controlled by politically exposed persons?')"><span class="qb-icon">🟣</span> PEP high-risk</button>
-      <button class="chat-quick-btn" onclick="chatQ('Find shell companies in offshore jurisdictions linked to sanctioned or PEP persons')"><span class="qb-icon">🏚️</span> Offshore shells + sanctions</button>
-      <button class="chat-quick-btn" onclick="chatQ('Assess the total risk exposure of all circular ownership rings')"><span class="qb-icon">🔄</span> Ring risk assessment</button>
-      <button class="chat-quick-btn" onclick="chatQ('Who controls the most entities behind the scenes through multiple layers?')"><span class="qb-icon">🕵️</span> Hidden controllers</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which entities combine multiple money laundering red flags?')"><span class="qb-icon">🚩</span> Multi-red-flag AML</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which entities are at risk because they are close to sanctioned entities?')"><span class="qb-icon">☢️</span> Contagion risk</button>
-      <button class="chat-quick-btn" onclick="chatQ('What are the deepest corporate ownership hierarchies?')"><span class="qb-icon">🌲</span> Largest ownership trees</button>
-      <button class="chat-quick-btn" onclick="chatQ('Where is risk concentrated across jurisdictions and categories?')"><span class="qb-icon">🗺️</span> Risk heatmap</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which communities have dangerously high risk scores?')"><span class="qb-icon">👥</span> High-risk communities</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which entity pairs form the most active transaction networks?')"><span class="qb-icon">💸</span> Transaction networks</button>
-      <button class="chat-quick-btn" onclick="chatQ('What is the blast radius if ENTITY_0385 is sanctioned?')"><span class="qb-icon">💥</span> Sanctions blast radius</button>
-      <button class="chat-quick-btn" onclick="chatQ('Find individuals who control entities across 3 or more countries')"><span class="qb-icon">🌍</span> Cross-border controllers</button>
-      <button class="chat-quick-btn" onclick="chatQ('Which entities are the weakest links in the network?')"><span class="qb-icon">⛓️</span> Network chokepoints</button>
-      <button class="chat-quick-btn" onclick="chatQ('Find controllers whose entities span wide risk ranges')"><span class="qb-icon">📉</span> Risk arbitrage</button>
-      <button class="chat-quick-btn" onclick="chatQ('Investigate ENTITY_0303')"><span class="qb-icon">🔎</span> Due diligence report</button>
-      <h4>🔴 Advanced SPARQL</h4>
-      <button class="chat-quick-btn" onclick="chatQ('How does FIBO model ownership and control?')"><span class="qb-icon">🧬</span> FIBO ownership model</button>
-      <button class="chat-quick-btn" onclick="chatQ('How are GLEIF entities typed across ontologies?')"><span class="qb-icon">🏷️</span> GLEIF type analysis</button>
-      <button class="chat-quick-btn" onclick="chatQ('How complete is our knowledge graph?')"><span class="qb-icon">📊</span> Ontology coverage</button>
-      <button class="chat-quick-btn" onclick="chatQ('How do FIBO, GLEIF, and KYC ontologies relate?')"><span class="qb-icon">🔗</span> Cross-ontology links</button>
+      <h4>Analytics</h4>
+      <button class="chat-quick-btn" onclick="chatQ('Find circular ownership structures')"><span class="qb-icon">🔄</span> Circular ownership</button>
+      <button class="chat-quick-btn" onclick="chatQ('Which entities are connected to sanctioned persons?')"><span class="qb-icon">🔴</span> Sanctions check</button>
+      <button class="chat-quick-btn" onclick="chatQ('Find shell companies')"><span class="qb-icon">🐚</span> Shell companies</button>
+      <button class="chat-quick-btn" onclick="chatQ('Suspicious transactions')"><span class="qb-icon">🚨</span> Suspicious txns</button>
+      <h4>Knowledge Graph</h4>
+      <button class="chat-quick-btn" onclick="chatQ('FIBO classes')"><span class="qb-icon">🧬</span> FIBO classes</button>
+      <button class="chat-quick-btn" onclick="chatQ('Named graphs')"><span class="qb-icon">📂</span> Named graphs</button>
+      <button class="chat-quick-btn" onclick="chatQ('How does FIBO model ownership?')"><span class="qb-icon">📑</span> Ownership model</button>
     </div>
     <!-- Main chat area -->
     <div class="chat-main">
@@ -380,14 +347,18 @@ button.secondary.active-btn { background: var(--accent-light); color: var(--acce
       <div class="chat-messages" id="chat-messages">
         <div class="chat-msg bot">
           <strong>KYC Investigation Assistant</strong> <span style="font-size:11px;color:var(--text3)" id="mode-badge">🤖 Agent Mode</span><br><br>
-          I'm powered by a <strong>LangGraph ReAct agent</strong> with 20 specialized tools querying <strong>Neo4j</strong> and <strong>GraphDB</strong>.<br><br>
-          <strong>Ask me anything:</strong><br>
-          • "Who really owns ENTITY_0042 and are they sanctioned?"<br>
-          • "Compare the risk profiles of all entities in the Cayman Islands"<br>
-          • "What are the money laundering red flags for ENTITY_0303?"<br>
-          • "How does FIBO model corporate ownership?"<br><br>
-          I support <strong>follow-up questions</strong> — ask clarifying questions and I'll remember the context.<br>
-          Toggle off Agent Mode for the legacy pattern-matching engine.
+          I'm powered by a <strong>LangGraph ReAct agent</strong> with 24 specialized tools querying <strong>Neo4j</strong> and <strong>GraphDB</strong>.<br><br>
+          <strong>Capabilities:</strong><br>
+          • 🔍 <strong>Semantic Search</strong> — find entities by meaning, not just name<br>
+          • 🌐 <strong>Diffbot Enrichment</strong> — extract real data from web/Wikipedia<br>
+          • 📊 <strong>Graph Analytics</strong> — ownership, risk, communities, transactions<br>
+          • 🧬 <strong>Ontology Queries</strong> — FIBO/GLEIF via SPARQL<br><br>
+          <strong>Try:</strong><br>
+          • "Enrich the graph with data about Deutsche Bank"<br>
+          • "Search for entities related to money laundering"<br>
+          • "What organizations are connected to HSBC?"<br>
+          • "Graph statistics"<br><br>
+          I support <strong>follow-up questions</strong> — ask clarifying questions and I'll remember the context.
         </div>
       </div>
       <div class="chat-input-row">
@@ -529,6 +500,52 @@ button.secondary.active-btn { background: var(--accent-light); color: var(--acce
   </div>
 </div>
 
+</div>
+
+<!-- ═══ PAGE: Enrich (Diffbot) ═══ -->
+<div class="page" id="page-enrich">
+  <div class="card mb-16">
+    <h3>🌐 Enrich Knowledge Graph with Diffbot NLP</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Extract real entities and relationships from web pages, Wikipedia, or raw text using Diffbot's NLP API.
+      Data is automatically loaded into Neo4j for querying.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div>
+        <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px">Entity Name (Wikipedia)</label>
+        <input type="text" id="enrich-entity" placeholder="e.g. Deutsche Bank" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px">URL (any webpage)</label>
+        <input type="text" id="enrich-url" placeholder="https://..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+      </div>
+      <div>
+        <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px">Raw Text</label>
+        <textarea id="enrich-text" placeholder="Paste news article, filing, etc." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;height:36px;resize:vertical"></textarea>
+      </div>
+    </div>
+    <button onclick="enrichGraph()" style="margin-top:12px;padding:8px 20px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600">Extract & Load</button>
+    <div id="enrich-result" style="margin-top:12px;font-size:13px;white-space:pre-wrap"></div>
+  </div>
+  <div class="card mb-16">
+    <h3>🔍 Semantic Vector Search</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+      Search entities by meaning using Ollama nomic-embed-text embeddings + Neo4j vector index.
+    </p>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="vector-search-input" placeholder="e.g. banks involved in scandals" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px" onkeydown="if(event.key==='Enter')vectorSearch()">
+      <button onclick="vectorSearch()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:500">Search</button>
+    </div>
+    <div id="vector-results" style="margin-top:12px;font-size:13px;white-space:pre-wrap"></div>
+  </div>
+  <div class="card">
+    <h3>📊 Loaded Data Sources</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Sources that have been loaded into the knowledge graph via Diffbot.</p>
+    <div id="enrich-sources"></div>
+    <button onclick="loadEnrichSources()" style="margin-top:8px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">Refresh</button>
+  </div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /main -->
 
@@ -581,6 +598,7 @@ const pageLoaders = {
   shells: loadShells,
   ontology: loadOntology,
   gds: loadGDS,
+  enrich: loadEnrichSources,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1066,6 +1084,49 @@ async function resetSession() {
   document.getElementById('session-indicator').textContent = 'Session: ' + window._chatSessionId.slice(-8);
   const container = document.getElementById('chat-messages');
   container.innerHTML = `<div class="chat-msg bot">🔄 Session reset. Conversation memory cleared. Ask a new question!</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Enrichment & Vector Search
+// ═══════════════════════════════════════════════════════════════════════════════
+async function enrichGraph() {
+  const entity = document.getElementById('enrich-entity').value.trim();
+  const url = document.getElementById('enrich-url').value.trim();
+  const text = document.getElementById('enrich-text').value.trim();
+  const resultDiv = document.getElementById('enrich-result');
+  if (!entity && !url && !text) { resultDiv.textContent = 'Please provide entity name, URL, or text.'; return; }
+  resultDiv.innerHTML = '<span style="color:var(--accent)">⏳ Extracting entities via Diffbot NLP... (this may take 30-60s)</span>';
+  try {
+    const body = {};
+    if (entity) body.entity_name = entity;
+    else if (url) body.url = url;
+    else body.text = text;
+    const res = await api('/api/enrich', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    resultDiv.textContent = res.result || JSON.stringify(res);
+  } catch(e) { resultDiv.textContent = 'Error: ' + e.message; }
+}
+
+async function vectorSearch() {
+  const query = document.getElementById('vector-search-input').value.trim();
+  const resultDiv = document.getElementById('vector-results');
+  if (!query) { resultDiv.textContent = 'Enter a search query.'; return; }
+  resultDiv.innerHTML = '<span style="color:var(--accent)">⏳ Searching...</span>';
+  try {
+    const res = await api('/api/vector/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query, k:5})});
+    resultDiv.textContent = res.result || 'No results';
+  } catch(e) { resultDiv.textContent = 'Error: ' + e.message; }
+}
+
+async function loadEnrichSources() {
+  try {
+    const res = await api('/api/cypher', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:"MATCH (n:Document) RETURN n.source AS source, count{(n)-->()} AS connections LIMIT 20"})});
+    const div = document.getElementById('enrich-sources');
+    if (res.rows && res.rows.length > 0) {
+      div.innerHTML = res.rows.map(r => `<div style="padding:4px 0;border-bottom:1px solid var(--border2);font-size:12px">📄 ${r.source || 'unknown'} — ${r.connections} connections</div>`).join('');
+    } else {
+      div.innerHTML = '<span style="color:var(--text3);font-size:12px">No enrichment sources loaded yet. Use the form above to add real data.</span>';
+    }
+  } catch(e) { document.getElementById('enrich-sources').textContent = 'Could not load sources.'; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

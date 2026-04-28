@@ -63,8 +63,8 @@ async def kpis():
     entities = neo.query("""
         MATCH (e:LegalEntity)
         RETURN count(e) AS entities,
-               sum(CASE WHEN e.kycRiskScore >= 70 THEN 1 ELSE 0 END) AS highRisk,
-               toInteger(avg(e.kycRiskScore)) AS avgScore
+               sum(CASE WHEN e.kycRiskScore >= 50 THEN 1 ELSE 0 END) AS highRisk,
+               toInteger(coalesce(avg(e.kycRiskScore), 0)) AS avgScore
     """)[0]
     persons = neo.query("""
         MATCH (p:NaturalPerson)
@@ -77,11 +77,17 @@ async def kpis():
         WITH e.sccComponentId AS scc, count(e) AS sz WHERE sz > 1
         RETURN count(scc) AS rings
     """)[0]
-    txns = neo.query("""
-        MATCH ()-[t:TRANSACTION]->()
-        RETURN count(t) AS totalTxns,
-               sum(CASE WHEN t.isSuspicious THEN 1 ELSE 0 END) AS suspiciousTxns
-    """)[0]
+    # Transaction data not currently ingested (no synthetic data per project policy).
+    # Endpoint stays defensive so KPIs render cleanly until real wire/payment data lands.
+    has_txn = neo.query("CALL db.relationshipTypes() YIELD relationshipType WHERE relationshipType = 'TRANSACTION' RETURN count(*) AS c")[0]["c"] > 0
+    if has_txn:
+        txns = neo.query("""
+            MATCH ()-[t:TRANSACTION]->()
+            RETURN count(t) AS totalTxns,
+                   sum(CASE WHEN t.isSuspicious THEN 1 ELSE 0 END) AS suspiciousTxns
+        """)[0]
+    else:
+        txns = {"totalTxns": 0, "suspiciousTxns": 0}
     rels = neo.query("""
         MATCH ()-[r:DIRECTLY_OWNED_BY]->()
         RETURN count(r) AS ownershipRels
@@ -266,13 +272,16 @@ async def risk_distribution():
 async def risk_by_jurisdiction():
     return neo.query("""
         MATCH (e:LegalEntity)
+        WHERE e.jurisdiction IS NOT NULL AND e.kycRiskScore IS NOT NULL
         WITH e.jurisdiction AS jurisdiction, e.jurisdictionName AS name,
              collect(e.kycRiskScore) AS scores, count(e) AS count
+        WHERE size(scores) > 0
         RETURN jurisdiction, name, count,
                toInteger(reduce(s = 0.0, x IN scores | s + x) / size(scores)) AS avgScore,
                reduce(mx = 0, x IN scores | CASE WHEN x > mx THEN x ELSE mx END) AS maxScore,
-               size([s IN scores WHERE s >= 70]) AS highRiskCount
+               size([s IN scores WHERE s >= 50]) AS highRiskCount
         ORDER BY avgScore DESC
+        LIMIT 50
     """)
 
 
@@ -291,9 +300,21 @@ async def circular_ownership():
     """)
 
 
-# ─── Transactions ─────────────────────────────────────────────────────────────
+# ─── Transactions ────────────────────────────────────────────────────────────────
+# Transaction relationships are not currently in the graph (real wire/payment data
+# pending; synthetic data prohibited by project policy). Endpoints return [] so
+# the dashboard renders cleanly instead of erroring.
+def _has_transaction_rel() -> bool:
+    return neo.query(
+        "CALL db.relationshipTypes() YIELD relationshipType "
+        "WHERE relationshipType = 'TRANSACTION' RETURN count(*) AS c"
+    )[0]["c"] > 0
+
+
 @app.get("/api/transactions/suspicious")
 async def suspicious_transactions():
+    if not _has_transaction_rel():
+        return []
     return neo.query("""
         MATCH (a:LegalEntity)-[t:TRANSACTION]->(b:LegalEntity)
         WHERE t.isSuspicious = true
@@ -307,6 +328,8 @@ async def suspicious_transactions():
 
 @app.get("/api/transactions/structuring")
 async def structuring_transactions():
+    if not _has_transaction_rel():
+        return []
     return neo.query("""
         MATCH (a:LegalEntity)-[t:TRANSACTION]->(b:LegalEntity)
         WHERE t.amount > 9000 AND t.amount < 10000
@@ -323,6 +346,8 @@ async def structuring_transactions():
 
 @app.get("/api/transactions/entity/{entity_id}")
 async def entity_transactions(entity_id: str):
+    if not _has_transaction_rel():
+        return []
     return neo.query("""
         MATCH (e:LegalEntity {id: $id})-[t:TRANSACTION]-(other:LegalEntity)
         RETURN e.id AS entityId,
@@ -540,6 +565,42 @@ async def agent_reset(req: ResetSessionRequest):
     from dashboard.agent import reset_session
     reset_session(req.session_id)
     return {"status": "ok", "session_id": req.session_id}
+
+
+# ─── Enrichment endpoint (Diffbot) ───────────────────────────────────────────
+class EnrichRequest(BaseModel):
+    entity_name: str | None = None
+    url: str | None = None
+    text: str | None = None
+
+
+@app.post("/api/enrich")
+async def enrich_graph(req: EnrichRequest):
+    """Enrich the knowledge graph using Diffbot NLP from entity name, URL, or text."""
+    from dashboard.agent import enrich_entity_from_web, extract_entities_from_url, extract_entities_from_text
+    if req.entity_name:
+        result = enrich_entity_from_web.invoke(req.entity_name)
+    elif req.url:
+        result = extract_entities_from_url.invoke(req.url)
+    elif req.text:
+        result = extract_entities_from_text.invoke(req.text)
+    else:
+        raise HTTPException(400, "Provide entity_name, url, or text")
+    return {"result": result}
+
+
+# ─── Vector search endpoint ───────────────────────────────────────────────────
+class VectorSearchRequest(BaseModel):
+    query: str
+    k: int = 5
+
+
+@app.post("/api/vector/search")
+async def vector_search(req: VectorSearchRequest):
+    """Semantic vector search across entities."""
+    from dashboard.agent import semantic_search_entities
+    result = semantic_search_entities.invoke({"query": req.query, "k": req.k})
+    return {"result": result}
 
 
 # ─── SPARQL pass-through (read-only) ─────────────────────────────────────────
